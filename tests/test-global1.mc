@@ -6,7 +6,7 @@ void printa()
   print(a);
 }
 
-void printb()
+void printbb()
 {
   print(b);
 }
@@ -22,9 +22,9 @@ int main()
   a = 42;
   b = 21;
   printa();
-  printb();
+  printbb();
   incab();
   printa();
-  printb();
+  printbb();
   return 0;
 }

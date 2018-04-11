@@ -12,7 +12,12 @@ http://llvm.moe/ocaml/
 
 *)
 
+(* We'll refer to Llvm and Ast constructs with module names *)
+open Sast 
+
 module StringMap = Map.Make(String)
 
+(* Code Generation from the SAST. Returns an LLVM module if successful,
+   throws an exception if something is wrong. *)
 let translate functions =
-  print_string "OPENQASM 2.0;\n";
+  print_string "OPENQASM 2.0;\n"
