@@ -14,5 +14,5 @@ http://llvm.moe/ocaml/
 
 module StringMap = Map.Make(String)
 
-let translate (globals, functions) =
+let translate functions =
   print_string "OPENQASM 2.0;\n";
