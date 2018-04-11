@@ -9,7 +9,7 @@ all : microc.native printbig.o
 
 .PHONY: microc.native
 microc.native :
-	ocamlbuild -use-ocamlfind -pkgs llvm,llvm.analysis -cflags -w,+a-4 \
+	ocamlbuild -use-ocamlfind -cflags -w,+a-4 \
 		microc.native
 
 # "make clean" removes all generated files
