@@ -1,8 +1,8 @@
-int a;
-bool b;
 
 void foo(int c, bool d)    
 {
+  int a;
+  bool b;
   int dd;
   bool e;
   a + c;

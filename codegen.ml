@@ -89,7 +89,7 @@ let translate functions =
         (env, match op with 
             Equal -> VBool(e1' = e2')
           | Neq -> VBool(e1' != e2')
-          | And -> VBool(e1' && e1')
+          | And -> VBool(e1' && e2')
           | Or -> VBool(e1' || e2')
           | _ -> raise (Failure "bad op")
         )
@@ -98,6 +98,12 @@ let translate functions =
         let env, e' = unwrap_int (eval_expr env e) in
         (env, match op with
             Neg -> VInt(-e')
+          | _ -> raise (Failure "bad op")
+        )
+    | SUnop(op, ((Float, _) as e)) ->
+        let env, e' = unwrap_float (eval_expr env e) in
+        (env, match op with
+            Neg -> VFloat(-. e')
           | _ -> raise (Failure "bad op")
         )
     | SUnop(op, ((Bool, _) as e)) ->
@@ -114,7 +120,14 @@ let translate functions =
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
         es (env, []) in
-        env, eval_func name args
+        (match name, args with
+            "print", [VInt i] ->
+              print_string (string_of_int i ^ "\n"); env, VNoexpr
+          | "printb", [VBool b] ->
+              print_string (string_of_int (if b then 1 else 0) ^ "\n"); env, VNoexpr
+          | "printf", [VFloat f] ->
+              print_string (string_of_float f ^ "\n"); env, VNoexpr
+          | _ -> env, eval_func name args)
     | SNoexpr -> env, VNoexpr
 
   and
@@ -174,7 +187,5 @@ let translate functions =
         VNone -> VNoexpr
       | VReturn v -> v
   in
-    
 
-  print_string "OPENQASM 2.0;\n";
   ignore (eval_func "main" [])
