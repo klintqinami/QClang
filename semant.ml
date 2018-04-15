@@ -155,11 +155,13 @@ let check functions =
 
     (* Return a semantically-checked statement i.e. containing sexprs *)
     let rec check_stmt = function
-        Expr e -> SExpr (expr e)
-      | If(p, b1, b2) -> SIf(check_bool_expr p, check_stmt b1, check_stmt b2)
+        Expr e -> SExpr(expr e)
+      | If(p, b1, b2) ->
+          SIf(check_bool_expr p, check_stmt b1, check_stmt b2)
       | For(e1, e2, e3, st) ->
-	  SFor(expr e1, check_bool_expr e2, expr e3, check_stmt st)
-      | While(p, s) -> SWhile(check_bool_expr p, check_stmt s)
+	        SFor(expr e1, check_bool_expr e2, expr e3, check_stmt st)
+      | While(p, s) ->
+          SWhile(check_bool_expr p, check_stmt s)
       | Return e -> let (t, e') = expr e in
         if t = func.typ then SReturn (t, e') 
         else raise (
@@ -176,15 +178,36 @@ let check functions =
             | s :: ss         -> check_stmt s :: check_stmt_list ss
             | []              -> []
           in SBlock(check_stmt_list sl)
+    in
+
+    let rec transform_stmt follow = function
+        SExpr(e) -> (e :: fst follow, snd follow)
+      | SReturn(expr) -> ([], SReturnJump expr)
+      | SIf(cond, thn, els) ->
+          let thn' = transform_stmt follow thn and
+              els' = transform_stmt follow els in
+          ([], SCondJump(cond, ref thn', ref els'))
+      | SWhile(cond, body) ->
+          let header : block ref = ref ([], SReturnJump (Void, SNoexpr)) in
+          let body' = transform_stmt ([], SJump header) body in
+          header := ([], SCondJump(cond, ref body', ref follow));
+          ([], SJump(header))
+      | SFor(e1, e2, e3, body) ->
+          let header : block ref = ref ([], SReturnJump (Void, SNoexpr)) in
+          let body' = transform_stmt ([e3], SJump header) body in
+          header := ([], SCondJump(e2, ref body', ref follow));
+          ([e1], SJump(header))
+      | SBlock(slist) ->
+          List.fold_right (fun s follow -> transform_stmt follow s)
+          slist follow
 
     in (* body of check_function *)
+    let sbody = check_stmt (Block func.body)
+    in
     { styp = func.typ;
       sfname = func.fname;
       sformals = formals';
       slocals  = locals';
-      sbody = match check_stmt (Block func.body) with
-	SBlock(sl) -> sl
-      | _ -> let err = "internal error: block didn't become a block?"
-      in raise (Failure err)
+      sbody = transform_stmt ([], SReturnJump (Void, SNoexpr)) sbody;
     }
   in List.map check_function functions

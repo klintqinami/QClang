@@ -2,7 +2,6 @@
 produces QASM
 *)
 
-(* We'll refer to Llvm and Ast constructs with module names *)
 open Ast
 open Sast 
 
@@ -13,10 +12,6 @@ type value =
   | VBool of bool
   | VFloat of float
   | VNoexpr
-
-type stmt_val =
-    VNone
-  | VReturn of value
 
 type environment = value StringMap.t
 
@@ -132,47 +127,16 @@ let translate functions =
 
   and
 
-  eval_stmts env slist =
-    List.fold_left (fun (env, sv) stmt ->
-        if sv = VNone then eval_stmt env stmt else env, sv)
-    (env, VNone) slist
-
-  and
-
-  eval_stmt env = function
-      SBlock(lst) -> eval_stmts env lst
-    | SExpr(expr) ->
-        let env, _ = eval_expr env expr in
-        env, VNone
-    | SIf(cond, thn, els) ->
-        let env, cond' = unwrap_bool (eval_expr env cond) in
-        eval_stmt env (if cond' then thn else els)
-    | SFor(init, test, final, body) ->
-        let env, _ = eval_expr env init in
-        let rec eval_body env =
-          let env, test' = unwrap_bool (eval_expr env test) in
-          if test' then
-            let env, sv = eval_stmt env body in
-            if sv = VNone then
-              let env, _ = eval_expr env final in
-              eval_body env
-            else
-              env, sv
-          else
-            env, VNone
-        in eval_body env
-    | SWhile(cond, body) ->
-        let rec eval_body env =
+  eval_block env (stmts, term) =
+    let env = List.fold_left (fun env expr ->
+      let env, _ = eval_expr env expr in env)
+    env stmts in
+    match term with
+        SReturnJump e -> snd (eval_expr env e)
+      | SJump b -> eval_block env !b
+      | SCondJump(cond, thn, els) ->
           let env, cond' = unwrap_bool (eval_expr env cond) in
-          if cond' then
-            let env, sv = eval_stmt env body in
-            if sv = VNone then eval_body env else env, sv
-          else
-            env, VNone
-        in eval_body env
-    | SReturn(expr) ->
-        let env, ret = eval_expr env expr in
-        env, VReturn ret
+          if cond' then eval_block env !thn else eval_block env !els
 
   and
       
@@ -182,10 +146,7 @@ let translate functions =
       StringMap.add name arg env) StringMap.empty func.sformals args in
     let env = List.fold_left (fun env (typ, name) ->
       StringMap.add name (default_val typ) env) env func.slocals in
-    let _, sv = eval_stmts env func.sbody in
-    match sv with
-        VNone -> VNoexpr
-      | VReturn v -> v
+    eval_block env func.sbody
   in
 
   ignore (eval_func "main" [])

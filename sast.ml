@@ -14,20 +14,28 @@ and sx =
   | SCall of string * sexpr list
   | SNoexpr
 
+type jump =
+    SReturnJump of sexpr
+  | SJump of block ref
+  | SCondJump of sexpr * block ref * block ref
+and block = sexpr list * jump
+
+module BlockMap = Map.Make(struct type t = block ref let compare = compare end)
+
 type sstmt =
-    SBlock of sstmt list
-  | SExpr of sexpr
-  | SReturn of sexpr
-  | SIf of sexpr * sstmt * sstmt
+    SIf of sexpr * sstmt * sstmt
   | SFor of sexpr * sexpr * sexpr * sstmt
   | SWhile of sexpr * sstmt
+  | SBlock of sstmt list
+  | SExpr of sexpr
+  | SReturn of sexpr
 
 type sfunc_decl = {
     styp : typ;
     sfname : string;
     sformals : bind list;
     slocals : bind list;
-    sbody : sstmt list;
+    sbody : block;
   }
 
 type sprogram = sfunc_decl list
@@ -64,12 +72,46 @@ let rec string_of_sstmt = function
       string_of_sexpr e3  ^ ") " ^ string_of_sstmt s
   | SWhile(e, s) -> "while (" ^ string_of_sexpr e ^ ") " ^ string_of_sstmt s
 
+
+let string_of_block block =
+  let get_block_name (names, id) block =
+    if BlockMap.mem block names then
+      BlockMap.find block names, (names, id)
+    else
+      let name = string_of_int id in
+      name, (BlockMap.add block name names, id + 1)
+  in
+  let rec string_of_block' block names visited =
+    if BlockMap.mem block visited then "", names, visited else
+    let slist, jump = !block in
+    let name, names = get_block_name names block in
+    let visited = BlockMap.add block () visited in
+    let start =  name ^ ":\n" ^
+    String.concat "\n" (List.map string_of_sexpr slist) ^ "\n" in
+    match jump with
+        SReturnJump(e) -> (start ^ "return " ^ string_of_sexpr e ^ ";\n"), names, visited
+      | SJump(dest) ->
+          let dest_name, names = get_block_name names dest in
+          let dest_str, names, visited = string_of_block' dest names visited in
+          start ^ "jump " ^ dest_name ^ ";\n" ^ dest_str, names, visited
+      | SCondJump(cond, dest1, dest2) ->
+          let dest1_name, names = get_block_name names dest1 in
+          let dest2_name, names = get_block_name names dest2 in
+          let dest1_str, names, visited = string_of_block' dest1 names visited in
+          let dest2_str, names, visited = string_of_block' dest2 names visited in
+          start ^ "cond_jump " ^ (string_of_sexpr cond) ^ ", " ^
+          dest1_name ^ ", " ^ dest2_name ^ ";\n" ^ dest1_str ^ dest2_str,
+          names, visited
+  in
+  let block_ref = ref block in
+  let str, _, _ = string_of_block' block_ref (BlockMap.empty, 0) BlockMap.empty in str
+
 let string_of_sfdecl fdecl =
   string_of_typ fdecl.styp ^ " " ^
   fdecl.sfname ^ "(" ^ String.concat ", " (List.map snd fdecl.sformals) ^
   ")\n{\n" ^
   String.concat "" (List.map string_of_vdecl fdecl.slocals) ^
-  String.concat "" (List.map string_of_sstmt fdecl.sbody) ^
+  string_of_block fdecl.sbody ^
   "}\n"
 
 let string_of_sprogram funcs =
