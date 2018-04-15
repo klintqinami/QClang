@@ -1,6 +1,5 @@
-(* Code generation: translate takes a semantically checked AST and
-produces QASM
-*)
+(* Code generation: translate takes a semantically checked AST and produces 
+ * QASM *)
 
 open Ast
 open Sast 
@@ -11,6 +10,7 @@ type value =
     VInt of int
   | VBool of bool
   | VFloat of float
+  | VQubit 
   | VNoexpr
 
 type environment = value StringMap.t
@@ -21,19 +21,20 @@ let unwrap_int = function
   
 let unwrap_float = function
     env, VFloat(f) -> env, f
-  | _ -> raise (Failure "missing int")
+  | _ -> raise (Failure "missing float")
 
 let unwrap_bool = function
     env, VBool(b) -> env, b
-  | _ -> raise (Failure "missing int")
-
+  | _ -> raise (Failure "missing bool")
+ 
 let default_val = function
     Int -> VInt 0
   | Bool -> VBool false
   | Float -> VFloat 0.
+  | Qubit -> VQubit 
   | Void -> VNoexpr
 
-(* Code Generation from the SAST. Returns an LLVM module if successful,
+(* Code Generation from the SAST. Returns OpenQASM IR if successful,
    throws an exception if something is wrong. *)
 let translate functions =
   let function_map = List.fold_left (fun map fdecl ->

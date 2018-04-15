@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Regression testing script for MicroC
-# Author: Stephen Edwards
+# Regression testing script for QClang, adapted from regression suite for
+# MicroC by Stephen Edwards
 # Step through a list of files
 #  Compile, run, and check the output of each expected-to-work test
 #  Compile and check the error of each expected-to-fail test
