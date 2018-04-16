@@ -24,7 +24,7 @@ keep=0
 onlyIR=0
 
 Usage() {
-    echo "Usage: testall.sh [options] [.mc files]"
+    echo "Usage: testall.sh [options] [.qc files]"
     echo "-k    Keep intermediate files"
     echo "-o    Don't test QASM output"
     echo "-h    Print this help"
@@ -74,8 +74,8 @@ RunFail() {
 Check() {
     error=0
     basename=`echo $1 | sed 's/.*\\///
-                             s/.mc//'`
-    reffile=`echo $1 | sed 's/.mc$//'`
+                             s/.qc//'`
+    reffile=`echo $1 | sed 's/.qc$//'`
     basedir="`echo $1 | sed 's/\/[^\/]*$//'`/."
 
     echo -n "$basename..."
@@ -88,10 +88,10 @@ Check() {
     generatedfiles="$generatedfiles ${basename}.ll ${basename}.s \
         ${basename}.exe ${basename}.qout ${basename}.out" &&
     Run "$QCLANG" "$1" ">" "${basename}.out" &&
-    Compare ${basename}.out ${reffile}.out ${basename}.diff
-    if [$onlyIR -eq 0] ; then
-        Run "$QASM" "${basename}.out" ">" "${basename}.qout" &&
-        Compare ${basename}.qout ${reffile}.qout ${basename}.qdiff
+    Compare ${basename}.out ${reffile}.out ${basename}.diff 
+    if [ $onlyIR -eq 0 ] ; then
+        Run "$QASM" "${basename}.out" ">" "${basename}.qout" 
+        Compare ${basename}.qout ${reffile}.qout ${basename}.qdiff 
     fi
 
     # Report the status and clean up the generated files
@@ -111,8 +111,8 @@ Check() {
 CheckFail() {
     error=0
     basename=`echo $1 | sed 's/.*\\///
-                             s/.mc//'`
-    reffile=`echo $1 | sed 's/.mc$//'`
+                             s/.qc//'`
+    reffile=`echo $1 | sed 's/.qc$//'`
     basedir="`echo $1 | sed 's/\/[^\/]*$//'`/."
 
     echo -n "$basename..."
@@ -160,7 +160,7 @@ if [ $# -ge 1 ]
 then
     files=$@
 else
-    files="tests/test-*.mc tests/fail-*.mc"
+    files="tests/test-*.qc tests/fail-*.qc"
 fi
 
 for file in $files

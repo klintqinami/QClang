@@ -1,7 +1,7 @@
 _build/
 printbig.o
-microc
-microc.native
+qclang
+qclang.native
 *.ll
 testall.log
 *.swp

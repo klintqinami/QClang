@@ -78,8 +78,8 @@ FAILS = \
   func8 func9 global1 global2 if1 if2 if3 nomain printbig printb print \
   return1 return2 while1 while2
   
-TESTFILES = $(TESTS:%=test-%.mc) $(TESTS:%=test-%.out) \
-	    $(FAILS:%=fail-%.mc) $(FAILS:%=fail-%.err)
+TESTFILES = $(TESTS:%=test-%.qc) $(TESTS:%=test-%.out) \
+	    $(FAILS:%=fail-%.qc) $(FAILS:%=fail-%.err)
 
 TARFILES = README \
         ast.ml sast.ml codegen.ml Makefile qclang.ml parser.mly \
