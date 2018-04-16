@@ -55,6 +55,8 @@ void printbig(int c)
   if (c >= '0' && c <= '9') index = 8 + (c - '0') * 8;
   else if (c >= 'A' && c <= 'Z') index = 88 + (c - 'A') * 8;
   do {
+    putchar('/');
+    putchar('/');
     data = font[index++];
     for (col = 0 ; col < 8 ; data <<= 1, col++) {
       char d = data & 0x80 ? 'X' : ' ';

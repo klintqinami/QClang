@@ -118,11 +118,12 @@ let translate functions =
         es (env, []) in
         (match name, args with
             "print", [VInt i] ->
-              print_string (string_of_int i ^ "\n"); env, VNoexpr
+              print_string ("// " ^ string_of_int i ^ "\n"); env, VNoexpr
           | "printb", [VBool b] ->
-              print_string (string_of_int (if b then 1 else 0) ^ "\n"); env, VNoexpr
+              print_string ("// " ^ string_of_int (if b then 1 else 0) ^ "\n");
+              env, VNoexpr
           | "printf", [VFloat f] ->
-              print_string (string_of_float f ^ "\n"); env, VNoexpr
+              print_string ("// " ^ string_of_float f ^ "\n"); env, VNoexpr
           | _ -> env, eval_func name args)
     | SNoexpr -> env, VNoexpr
 
@@ -149,5 +150,12 @@ let translate functions =
       StringMap.add name (default_val typ) env) env func.slocals in
     eval_block env func.sbody
   in
+
+  (* Temporary minimal circuit for testing *)
+  print_string "OPENQASM 2.0;\n";
+  print_string "include \"qelib1.inc\";\n";
+  print_string "qreg q[1];\n";
+  print_string "creg c[1];\n";
+  print_string "h q;\n";
 
   ignore (eval_func "main" [])

@@ -9,7 +9,7 @@
 # Path to the microc compiler.  Usually "./microc.native"
 # Try "_build/microc.native" if ocamlbuild was unable to create a symbolic link.
 MICROC="./microc.native"
-#MICROC="_build/microc.native"
+QASM="python3 run_qasm.py"
 
 # Set time limit for all operations
 ulimit -t 30
@@ -84,7 +84,9 @@ Check() {
 
     generatedfiles="$generatedfiles ${basename}.ll ${basename}.s ${basename}.exe ${basename}.out" &&
     Run "$MICROC" "$1" ">" "${basename}.out" &&
+    Run "$QASM" "${basename}.out" ">" "${basename}.qout" &&
     Compare ${basename}.out ${reffile}.out ${basename}.diff
+    Compare ${basename}.qout ${reffile}.qout ${basename}.qdiff
 
     # Report the status and clean up the generated files
 
