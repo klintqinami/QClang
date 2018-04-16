@@ -5,29 +5,29 @@
 # Easiest way to build: using ocamlbuild, which in turn uses ocamlfind
 
 .PHONY : all
-all : microc.native printbig.o
+all : qclang.native printbig.o
 
-.PHONY : microc.native
-microc.native :
+.PHONY : qclang.native
+qclang.native :
 	rm -f *.o
 	ocamlbuild -use-ocamlfind -cflags -w,+a-4 \
-		microc.native
+		qclang.native
 
 # "make clean" removes all generated files
 
 .PHONY : clean
 clean :
 	ocamlbuild -clean
-	rm -rf testall.log *.diff *.qdiff microc scanner.ml parser.ml parser.mli
+	rm -rf testall.log *.diff *.qdiff qclang scanner.ml parser.ml parser.mli
 	rm -rf printbig
 	rm -rf *.cmx *.cmi *.cmo *.cmx *.o *.s *.ll *.out *.qout *.exe 
 
 # More detailed: build using ocamlc/ocamlopt + ocamlfind to locate LLVM
 
-OBJS = ast.cmx sast.cmx codegen.cmx parser.cmx scanner.cmx semant.cmx microc.cmx
+OBJS = ast.cmx sast.cmx codegen.cmx parser.cmx scanner.cmx semant.cmx qclang.cmx
 
-microc : $(OBJS)
-	ocamlfind ocamlopt -linkpkg -package llvm -package llvm.analysis $(OBJS) -o microc
+qclang : $(OBJS)
+	ocamlfind ocamlopt -linkpkg -package llvm -package llvm.analysis $(OBJS) -o qclang
 
 scanner.ml : scanner.mll
 	ocamllex scanner.mll
@@ -54,8 +54,8 @@ ast.cmo :
 ast.cmx :
 codegen.cmo : ast.cmo
 codegen.cmx : ast.cmx
-microc.cmo : semant.cmo scanner.cmo parser.cmi codegen.cmo ast.cmo
-microc.cmx : semant.cmx scanner.cmx parser.cmx codegen.cmx ast.cmx
+qclang.cmo : semant.cmo scanner.cmo parser.cmi codegen.cmo ast.cmo
+qclang.cmx : semant.cmx scanner.cmx parser.cmx codegen.cmx ast.cmx
 parser.cmo : ast.cmo parser.cmi
 parser.cmx : ast.cmx parser.cmi
 scanner.cmo : parser.cmi
@@ -82,12 +82,12 @@ TESTFILES = $(TESTS:%=test-%.mc) $(TESTS:%=test-%.out) \
 	    $(FAILS:%=fail-%.mc) $(FAILS:%=fail-%.err)
 
 TARFILES = README \
-        ast.ml sast.ml codegen.ml Makefile microc.ml parser.mly \
+        ast.ml sast.ml codegen.ml Makefile qclang.ml parser.mly \
         scanner.mll semant.ml testall.sh printbig.c \
 	$(TESTFILES:%=tests/%)
 
-tar : microc-sast.tar.gz
+tar : qclang-sast.tar.gz
 
-microc-sast.tar.gz : $(TARFILES)
-	cd .. && tar czf microc-sast/microc-sast.tar.gz \
-		$(TARFILES:%=microc-sast/%)
+qclang-sast.tar.gz : $(TARFILES)
+	cd .. && tar czf qclang-sast/qclang-sast.tar.gz \
+		$(TARFILES:%=qclang-sast/%)

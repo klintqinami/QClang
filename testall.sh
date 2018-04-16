@@ -6,9 +6,10 @@
 #  Compile, run, and check the output of each expected-to-work test
 #  Compile and check the error of each expected-to-fail test
 
-# Path to the microc compiler.  Usually "./microc.native"
-# Try "_build/microc.native" if ocamlbuild was unable to create a symbolic link.
-MICROC="./microc.native"
+# Path to the qclang compiler.  Usually "./qclang.native"
+# Try "_build/qclang.native" if ocamlbuild was unable to create a symbolic link.
+make &> /dev/null 
+QCLANG="./qclang.native"
 QASM="python3 run_qasm.py"
 
 # Set time limit for all operations
@@ -20,10 +21,12 @@ error=0
 globalerror=0
 
 keep=0
+onlyIR=0
 
 Usage() {
     echo "Usage: testall.sh [options] [.mc files]"
     echo "-k    Keep intermediate files"
+    echo "-o    Don't test QASM output"
     echo "-h    Print this help"
     exit 1
 }
@@ -82,11 +85,14 @@ Check() {
 
     generatedfiles=""
 
-    generatedfiles="$generatedfiles ${basename}.ll ${basename}.s ${basename}.exe ${basename}.out" &&
-    Run "$MICROC" "$1" ">" "${basename}.out" &&
-    Run "$QASM" "${basename}.out" ">" "${basename}.qout" &&
+    generatedfiles="$generatedfiles ${basename}.ll ${basename}.s \
+        ${basename}.exe ${basename}.qout ${basename}.out" &&
+    Run "$QCLANG" "$1" ">" "${basename}.out" &&
     Compare ${basename}.out ${reffile}.out ${basename}.diff
-    Compare ${basename}.qout ${reffile}.qout ${basename}.qdiff
+    if [$onlyIR -eq 0] ; then
+        Run "$QASM" "${basename}.out" ">" "${basename}.qout" &&
+        Compare ${basename}.qout ${reffile}.qout ${basename}.qdiff
+    fi
 
     # Report the status and clean up the generated files
 
@@ -117,7 +123,7 @@ CheckFail() {
     generatedfiles=""
 
     generatedfiles="$generatedfiles ${basename}.err ${basename}.diff" &&
-    RunFail "$MICROC" "<" $1 "2>" "${basename}.err" ">>" $globallog &&
+    RunFail "$QCLANG" "<" $1 "2>" "${basename}.err" ">>" $globallog &&
     Compare ${basename}.err ${reffile}.err ${basename}.diff
 
     # Report the status and clean up the generated files
@@ -134,10 +140,13 @@ CheckFail() {
     fi
 }
 
-while getopts kdpsh c; do
+while getopts kodpsh c; do
     case $c in
 	k) # Keep intermediate files
 	    keep=1
+	    ;;
+	o) # Don't test QASM output
+	    onlyIR=1
 	    ;;
 	h) # Help
 	    Usage
