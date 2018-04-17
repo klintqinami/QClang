@@ -86,7 +86,7 @@ expr_opt:
 
 expr:
     LITERAL          { Literal($1)            }
-  | FLIT	           { Fliteral($1)           }
+  | FLIT	         { Fliteral($1)           }
   | BLIT             { BoolLit($1)            }
   | ID               { Id($1)                 }
   | expr PLUS   expr { Binop($1, Add,   $3)   }
@@ -101,15 +101,22 @@ expr:
   | expr GEQ    expr { Binop($1, Geq,   $3)   }
   | expr AND    expr { Binop($1, And,   $3)   }
   | expr OR     expr { Binop($1, Or,    $3)   }
-  | MINUS expr %prec NEG { Unop(Neg, $2)      }
-  | NOT expr         { Unop(Not, $2)          }
-  | ID ASSIGN expr   { Assign($1, $3)         }
-  | ID LPAREN args_opt RPAREN { Call($1, $3)  }
-  | LPAREN expr RPAREN { $2                   }
+  | MINUS expr %prec NEG          { Unop(Neg, $2)  }
+  | NOT expr                      { Unop(Not, $2)  }
+  | ID ASSIGN expr                { Assign($1, $3) }
+  | ID LPAREN args_opt RPAREN     { Call($1, $3)   }
+  | LPAREN expr RPAREN            { $2             }
+  | LPAREN tup_args RPAREN        { TupleLit($2)   }
 
 args_opt:
     /* nothing */ { [] }
   | args_list  { List.rev $1 }
+
+tup_args: tup_list { List.rev $1 }
+
+tup_list:
+    expr COMMA expr { [$3 ; $1] }
+  | tup_list COMMA expr { $3 :: $1 }
 
 args_list:
     expr                    { [$1] }

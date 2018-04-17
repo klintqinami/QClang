@@ -7,6 +7,7 @@ and sx =
     SLiteral of int
   | SFliteral of string
   | SBoolLit of bool
+  | STupleLit of sexpr list 
   | SId of string
   | SBinop of sexpr * op * sexpr
   | SUnop of uop * sexpr
@@ -55,6 +56,7 @@ let rec string_of_sexpr (t, e) =
   | SAssign(v, e) -> v ^ " = " ^ string_of_sexpr e
   | SCall(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ")"
+  | STupleLit(el) -> "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ")"
   | SNoexpr -> ""
 				  ) ^ ")"				     
 

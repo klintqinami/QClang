@@ -10,7 +10,8 @@ type value =
     VInt of int
   | VBool of bool
   | VFloat of float
-  | VQubit 
+  | VQubit
+  | VTuple of value list
   | VNoexpr
 
 type environment = value StringMap.t
@@ -27,11 +28,12 @@ let unwrap_bool = function
     env, VBool(b) -> env, b
   | _ -> raise (Failure "missing bool")
  
-let default_val = function
+let rec default_val = function
     Int -> VInt 0
   | Bool -> VBool false
   | Float -> VFloat 0.
   | Qubit -> VQubit 
+  | Tuple(el) -> VTuple (List.map default_val el)
   | Void -> VNoexpr
 
 (* Code Generation from the SAST. Returns OpenQASM IR if successful,
@@ -45,6 +47,10 @@ let translate functions =
       SLiteral(i) -> env, VInt i
     | SFliteral(s) -> env, VFloat (float_of_string s)
     | SBoolLit(b) -> env, VBool b
+    | STupleLit(el) ->  
+        let env, args = List.fold_right (fun e (env, args) ->
+          let env, arg = eval_expr env e in (env, arg :: args))
+             el (env, []) in env, VTuple args
     | SId(n) -> env, StringMap.find n env
     | SBinop(((Int, _) as e1), op, ((Int, _) as e2)) ->
         let env, e1' = unwrap_int (eval_expr env e1) in

@@ -96,6 +96,10 @@ let check functions =
         Literal  l -> (Int, SLiteral l)
       | Fliteral l -> (Float, SFliteral l)
       | BoolLit l  -> (Bool, SBoolLit l)
+      | TupleLit(el) -> 
+          let el' = List.map expr el in
+          let types = List.map (fun (t, _) -> t) el' in
+            (Tuple(types), STupleLit(el'))
       | Noexpr     -> (Void, SNoexpr)
       | Id s       -> (type_of_identifier s, SId s)
       | Assign(var, e) as ex -> 

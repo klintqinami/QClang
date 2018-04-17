@@ -5,7 +5,7 @@ type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
 
 type uop = Neg | Not
 
-type typ = Int | Bool | Float | Qubit | Void 
+type typ = Int | Bool | Float | Qubit | Tuple of typ list | Void 
 
 type bind = typ * string
 
@@ -18,6 +18,7 @@ type expr =
   | Unop of uop * expr
   | Assign of string * expr
   | Call of string * expr list
+  | TupleLit of expr list
   | Noexpr
 
 type stmt =
@@ -71,6 +72,7 @@ let rec string_of_expr = function
   | Call(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> ""
+  | TupleLit(el) -> "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
 
 let rec string_of_stmt = function
     Block(stmts) ->
@@ -85,11 +87,12 @@ let rec string_of_stmt = function
       string_of_expr e3  ^ ") " ^ string_of_stmt s
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") " ^ string_of_stmt s
 
-let string_of_typ = function
+let rec string_of_typ = function
     Int -> "int"
   | Bool -> "bool"
   | Float -> "float"
   | Qubit -> "qubit"
+  | Tuple(el) -> "(" ^ String.concat ", " (List.map string_of_typ el) ^ ")"
   | Void -> "void"
 
 let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
