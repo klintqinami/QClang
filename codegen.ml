@@ -10,11 +10,11 @@ type value =
     VInt of int
   | VBool of bool
   | VFloat of float
-  | VQubit
+  | VQubit of string
   | VTuple of value list
   | VNoexpr
 
-type environment = value StringMap.t
+type environment = value StringMap.t * int
 
 let unwrap_int = function
     env, VInt(i) -> env, i
@@ -27,13 +27,20 @@ let unwrap_float = function
 let unwrap_bool = function
     env, VBool(b) -> env, b
   | _ -> raise (Failure "missing bool")
+
+let unwrap_qubit = function
+    env, VQubit(q) -> env, q
+  | _ -> raise (Failure "missing bool")
  
-let rec default_val = function
+let rec default_val name env = function
     Int -> VInt 0
   | Bool -> VBool false
   | Float -> VFloat 0.
-  | Qubit -> VQubit 
-  | Tuple(el) -> VTuple (List.map default_val el)
+  | Qubit -> let qname = name ^ "_q" ^ string_of_int (snd env) in
+      print_string ("qreg " ^ qname ^ "[1];\n");
+      VQubit (qname)
+  | Tuple(el) -> VTuple (List.mapi (fun i typ ->
+      default_val (name ^ "_" ^ (string_of_int i)) env typ) el)
   | Void -> VNoexpr
 
 (* Code Generation from the SAST. Returns OpenQASM IR if successful,
@@ -51,7 +58,7 @@ let translate functions =
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
              el (env, []) in env, VTuple args
-    | SId(n) -> env, StringMap.find n env
+    | SId(n) -> env, StringMap.find n (fst env)
     | SBinop(((Int, _) as e1), op, ((Int, _) as e2)) ->
         let env, e1' = unwrap_int (eval_expr env e1) in
         let env, e2' = unwrap_int (eval_expr env e2) in
@@ -114,10 +121,16 @@ let translate functions =
             Not -> VBool(not e')
           | _ -> raise (Failure "bad op")
         )
+    | SUnop(op, ((Qubit, _) as e)) ->
+        let env, q = unwrap_qubit (eval_expr env e) in
+        (env, match op with
+            Not -> print_string ("x " ^ q ^ "[0];\n"); VQubit(q)
+          | _ -> raise (Failure "bad op")
+        )
     | SUnop(_, _) -> raise (Failure "sounds like trouble")
     | SAssign(name, e) ->
-        let env, e' = eval_expr env e in
-        (StringMap.add name e' env, e')
+        let (map, cntr), e' = eval_expr env e in
+        ((StringMap.add name e' map, cntr), e')
     | SCall(name, es) ->
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
@@ -130,7 +143,7 @@ let translate functions =
               env, VNoexpr
           | "printf", [VFloat f] ->
               print_string ("// " ^ string_of_float f ^ "\n"); env, VNoexpr
-          | _ -> env, eval_func name args)
+          | _ -> eval_func name args (fst env, snd env + 1))
     | SNoexpr -> env, VNoexpr
 
   and
@@ -140,7 +153,7 @@ let translate functions =
       let env, _ = eval_expr env expr in env)
     env stmts in
     match term with
-        SReturnJump e -> snd (eval_expr env e)
+        SReturnJump e -> eval_expr env e
       | SJump b -> eval_block env !b
       | SCondJump(cond, thn, els) ->
           let env, cond' = unwrap_bool (eval_expr env cond) in
@@ -148,12 +161,13 @@ let translate functions =
 
   and
       
-  eval_func name args =
+  eval_func name args env =
     let func = StringMap.find name function_map in
-    let env = List.fold_left2 (fun env (_, name) arg ->
-      StringMap.add name arg env) StringMap.empty func.sformals args in
-    let env = List.fold_left (fun env (typ, name) ->
-      StringMap.add name (default_val typ) env) env func.slocals in
+    let env = List.fold_left2 (fun (names, cntr) (_, name) arg ->
+      (StringMap.add name arg names, cntr)) env func.sformals args in
+    let env = List.fold_left (fun (names, cntr) (typ, name) ->
+      (StringMap.add name (default_val name env typ) names, cntr))
+      env func.slocals in
     eval_block env func.sbody
   in
 
@@ -164,4 +178,6 @@ let translate functions =
   print_string "creg c[1];\n";
   print_string "h q;\n";
 
-  ignore (eval_func "main" [])
+  let initial_env = (StringMap.empty, 0) in
+
+  ignore (eval_func "main" [] initial_env)
