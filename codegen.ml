@@ -6,37 +6,60 @@ open Sast
 
 module StringMap = Map.Make(String)
 
-type value =
+type lvalue =
+    LVId of string
+  | LVTuple of lvalue * int
+  | LVValue of value
+and value =
     VInt of int
   | VBool of bool
   | VFloat of float
   | VQubit of string
+  | VQubitInvalid of lvalue
   | VTuple of value list
   | VNoexpr
 
-type environment = value StringMap.t * int
+type stmt_val =
+    VNone
+  | VReturn of value
+
+type environment = {
+  name_map : value StringMap.t;
+  counter : int;
+}
+
+let rec string_of_lval = function
+    LVId(n) -> n
+  | LVTuple(l, i) -> (string_of_lval l) ^ "[" ^ (string_of_int i) ^ "]"
+  | LVValue _ -> raise (Failure "internal error")
 
 let unwrap_int = function
     env, VInt(i) -> env, i
-  | _ -> raise (Failure "missing int")
+  | _ -> raise (Failure "internal error: missing int")
   
 let unwrap_float = function
     env, VFloat(f) -> env, f
-  | _ -> raise (Failure "missing float")
+  | _ -> raise (Failure "internal error: missing float")
 
 let unwrap_bool = function
     env, VBool(b) -> env, b
-  | _ -> raise (Failure "missing bool")
+  | _ -> raise (Failure "internal error: missing bool")
+
+let unwrap_tuple = function
+    env, VTuple(t) -> env, t
+  | _ -> raise (Failure "internal error: missing bool")
 
 let unwrap_qubit = function
     env, VQubit(q) -> env, q
-  | _ -> raise (Failure "missing bool")
+  | _, VQubitInvalid(var) ->
+      raise (Failure ("qubit " ^ (string_of_lval var) ^ " used more than once"))
+  | _ -> raise (Failure "internal error: missing qubit")
  
 let rec default_val name env = function
     Int -> VInt 0
   | Bool -> VBool false
   | Float -> VFloat 0.
-  | Qubit -> let qname = name ^ "_q" ^ string_of_int (snd env) in
+  | Qubit -> let qname = name ^ "_q" ^ string_of_int env.counter in
       print_string ("qreg " ^ qname ^ "[1];\n");
       VQubit (qname)
   | Tuple(el) -> VTuple (List.mapi (fun i typ ->
@@ -50,7 +73,27 @@ let translate functions =
     StringMap.add fdecl.sfname fdecl map) StringMap.empty functions
   in
 
-  let rec eval_expr env (_, expr) = match expr with
+  (* convert an expression into an lvalue for loading/storing *)
+  let rec eval_lval env ((_, e) as expr) = match e with
+      SId(n) -> env, LVId n
+    | _ -> let env, value = eval_expr env expr in
+        (* by the semantic checker, we should only hit this on the RHS *)
+        env, LVValue(value)
+  and load_lval env = function
+      LVId(s) -> StringMap.find s env.name_map
+    | LVTuple(lval, idx) ->
+        let _, value = unwrap_tuple (env, (load_lval env lval)) in
+        List.nth value idx
+    | LVValue(value) -> value
+  and store_lval env value = function
+      LVId(s) -> { env with name_map = StringMap.add s value env.name_map }
+    | LVTuple(lval, idx) ->
+        let env, old_val = unwrap_tuple (env, (load_lval env lval)) in
+        let new_val = VTuple (List.mapi (fun i prev ->
+          if i = idx then value else prev) old_val) in
+        store_lval env new_val lval
+    | LVValue _ -> env (* don't do anything if it's not actually an lvalue *)
+  and eval_expr env (typ, expr) = match expr with
       SLiteral(i) -> env, VInt i
     | SFliteral(s) -> env, VFloat (float_of_string s)
     | SBoolLit(b) -> env, VBool b
@@ -58,7 +101,6 @@ let translate functions =
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
              el (env, []) in env, VTuple args
-    | SId(n) -> env, StringMap.find n (fst env)
     | SBinop(((Int, _) as e1), op, ((Int, _) as e2)) ->
         let env, e1' = unwrap_int (eval_expr env e1) in
         let env, e2' = unwrap_int (eval_expr env e2) in
@@ -129,8 +171,8 @@ let translate functions =
         )
     | SUnop(_, _) -> raise (Failure "sounds like trouble")
     | SAssign(name, e) ->
-        let (map, cntr), e' = eval_expr env e in
-        ((StringMap.add name e' map, cntr), e')
+        let env, e' = eval_expr env e in
+        { env with name_map = StringMap.add name e' env.name_map }, e'
     | SCall(name, es) ->
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
@@ -143,32 +185,77 @@ let translate functions =
               env, VNoexpr
           | "printf", [VFloat f] ->
               print_string ("// " ^ string_of_float f ^ "\n"); env, VNoexpr
-          | _ -> eval_func name args (fst env, snd env + 1))
+          | _ -> eval_func name args { env with counter = env.counter + 1 })
     | SNoexpr -> env, VNoexpr
+    | _ -> let env, lval = eval_lval env (typ, expr) in
+        let value = load_lval env lval in
+        match value with
+            VQubitInvalid(var) ->
+              raise (Failure 
+                ("qubit " ^ (string_of_lval var) ^ " used more than once"))
+          | _ ->
+            (if typ = Qubit then store_lval env (VQubitInvalid lval) lval else env),
+            value
 
   and
 
-  eval_block env (stmts, term) =
-    let env = List.fold_left (fun env expr ->
-      let env, _ = eval_expr env expr in env)
-    env stmts in
-    match term with
-        SReturnJump e -> eval_expr env e
-      | SJump b -> eval_block env !b
-      | SCondJump(cond, thn, els) ->
+  eval_stmts env slist =
+    List.fold_left (fun (env, sv) stmt ->
+        if sv = VNone then eval_stmt env stmt else env, sv)
+    (env, VNone) slist
+
+  and
+
+  eval_stmt env = function
+      SBlock(lst) -> eval_stmts env lst
+    | SExpr(expr) ->
+        let env, _ = eval_expr env expr in
+        env, VNone
+    | SIf(cond, thn, els) ->
+        let env, cond' = unwrap_bool (eval_expr env cond) in
+        eval_stmt env (if cond' then thn else els)
+    | SFor(init, test, final, body) ->
+        let env, _ = eval_expr env init in
+        let rec eval_body env =
+          let env, test' = unwrap_bool (eval_expr env test) in
+          if test' then
+            let env, sv = eval_stmt env body in
+            if sv = VNone then
+              let env, _ = eval_expr env final in
+              eval_body env
+            else
+              env, sv
+          else
+            env, VNone
+        in eval_body env
+    | SWhile(cond, body) ->
+        let rec eval_body env =
           let env, cond' = unwrap_bool (eval_expr env cond) in
-          if cond' then eval_block env !thn else eval_block env !els
+          if cond' then
+            let env, sv = eval_stmt env body in
+            if sv = VNone then eval_body env else env, sv
+          else
+            env, VNone
+        in eval_body env
+    | SReturn(expr) ->
+        let env, ret = eval_expr env expr in
+        env, VReturn ret
 
   and
-      
+
   eval_func name args env =
     let func = StringMap.find name function_map in
-    let env = List.fold_left2 (fun (names, cntr) (_, name) arg ->
-      (StringMap.add name arg names, cntr)) env func.sformals args in
-    let env = List.fold_left (fun (names, cntr) (typ, name) ->
-      (StringMap.add name (default_val name env typ) names, cntr))
+    let env = List.fold_left2 (fun env (_, name) arg ->
+      { env with name_map = StringMap.add name arg env.name_map })
+    env func.sformals args in
+    let env = List.fold_left (fun env (typ, name) ->
+      { env with name_map =
+        StringMap.add name (default_val name env typ) env.name_map })
       env func.slocals in
-    eval_block env func.sbody
+    let _, sv = eval_stmt env func.sbody in
+    (env, match sv with
+        VNone -> VNoexpr
+      | VReturn v -> v)
   in
 
   (* Temporary minimal circuit for testing *)
@@ -178,6 +265,6 @@ let translate functions =
   print_string "creg c[1];\n";
   print_string "h q;\n";
 
-  let initial_env = (StringMap.empty, 0) in
+  let initial_env = { name_map = StringMap.empty; counter = 0; } in
 
   ignore (eval_func "main" [] initial_env)
