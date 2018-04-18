@@ -143,6 +143,8 @@ let translate functions =
               env, VNoexpr
           | "printf", [VFloat f] ->
               print_string ("// " ^ string_of_float f ^ "\n"); env, VNoexpr
+          | "hadamard", [VQubit q] ->
+                  print_string ("h " ^ q ^ ";\n"); env, VQubit q
           | _ -> eval_func name args (fst env, snd env + 1))
     | SNoexpr -> env, VNoexpr
 
