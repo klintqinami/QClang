@@ -4,6 +4,9 @@ open Ast
 open Sast
 
 module StringMap = Map.Make(String)
+module BlockMap = Map.Make(struct type t = block ref let compare = compare end)
+module StringSet = Set.Make(String)
+module BlockSet = Set.Make(struct type t = block ref let compare = compare end)
 
 (* Semantic checking of the AST. Returns an SAST if successful,
    throws an exception if something is wrong.
@@ -205,14 +208,71 @@ let check functions =
       | SBlock(slist) ->
           List.fold_right (fun s follow -> transform_stmt follow s)
           slist follow
+    in
+  
+    let check_affine header =
+      let rec check_expr used (typ, e) = match e with
+          STupleLit (el) -> List.fold_left check_expr used el
+        | SId name ->
+            if typ != Qubit then used else
+              if StringSet.mem name used then
+                raise (Failure ("qubit " ^ name ^ " used more than once"))
+              else
+                StringSet.add name used
+        | SBinop(e1, _, e2) -> check_expr (check_expr used e1) e2
+        | SUnop(_, e) -> check_expr used e
+        | SAssign(s, e) -> let used = check_expr used e in
+            StringSet.remove s used
+        | SCall(_, el) -> List.fold_right
+            (fun e used -> check_expr used e) el used
+        | _ -> used
+      in
+      let rec check_block state = function
+          [] -> ()
+        | blk :: worklist ->
+          let used = BlockMap.find blk state in
+          let used_after = List.fold_left check_expr used (fst !blk) in
+
+          let succs = function
+              SReturnJump _ -> []
+            | SJump s -> [s]
+            | SCondJump(_, s1, s2) -> [s1; s2]
+          in
+
+          let rec strset_union a b = 
+            if StringSet.is_empty a then b else
+              let f = StringSet.choose a in
+              strset_union (StringSet.remove f a) (StringSet.add f b)
+          in
+
+          let worklist, state = List.fold_left (fun (worklist, state) succ ->
+            let succ_used = if BlockMap.mem succ state then
+              BlockMap.find succ state
+            else
+              StringSet.empty
+            in
+            let succ_used' = strset_union succ_used used_after in
+            if succ_used' = succ_used then worklist, state else
+              (if List.mem succ worklist then worklist else succ :: worklist),
+              BlockMap.add succ succ_used' state)
+          (worklist, state) (succs (snd !blk)) in
+          check_block state worklist
+      in (* body of check_affine *)
+      let blk_ref = ref header in
+      let worklist = [blk_ref] and
+          state = BlockMap.singleton blk_ref StringSet.empty in
+      check_block state worklist
+
 
     in (* body of check_function *)
-    let sbody = check_stmt (Block func.body)
+    let sbody = check_stmt (Block func.body) in
+    let sbody' = transform_stmt ([], SReturnJump (Void, SNoexpr)) sbody
     in
+    check_affine sbody';
     { styp = func.typ;
       sfname = func.fname;
       sformals = formals';
       slocals  = locals';
-      sbody = transform_stmt ([], SReturnJump (Void, SNoexpr)) sbody;
+      sbody = sbody';
     }
   in List.map check_function functions
