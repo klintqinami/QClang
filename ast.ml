@@ -5,7 +5,7 @@ type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
 
 type uop = Neg | Not
 
-type typ = Int | Bool | Float | Qubit | Tuple of typ list | Void 
+type typ = Int | Bool | Float | Qubit | Bit | Tuple of typ list | Void 
 
 type bind = typ * string
 
@@ -92,6 +92,7 @@ let rec string_of_typ = function
   | Bool -> "bool"
   | Float -> "float"
   | Qubit -> "qubit"
+  | Bit -> "bit"
   | Tuple(el) -> "(" ^ String.concat ", " (List.map string_of_typ el) ^ ")"
   | Void -> "void"
 

@@ -15,6 +15,7 @@ and value =
   | VBool of bool
   | VFloat of float
   | VQubit of string
+  | VBit of string
   | VQubitInvalid of lvalue
   | VTuple of value list
   | VNoexpr
@@ -47,7 +48,11 @@ let unwrap_bool = function
 
 let unwrap_tuple = function
     env, VTuple(t) -> env, t
-  | _ -> raise (Failure "internal error: missing bool")
+  | _ -> raise (Failure "internal error: missing tuple")
+
+let unwrap_bit = function
+    env, VBit(b) -> env, b
+  | _ -> raise (Failure "internal error: missing bit")
 
 let unwrap_qubit = function
     env, VQubit(q) -> env, q
@@ -62,6 +67,9 @@ let rec default_val name env = function
   | Qubit -> let qname = name ^ "_q" ^ string_of_int env.counter in
       print_string ("qreg " ^ qname ^ "[1];\n");
       VQubit (qname)
+  | Bit -> let bname = name ^ "_b" ^ string_of_int env.counter in
+      print_string ("creg " ^ bname ^ "[1];\n");
+      VBit (bname)
   | Tuple(el) -> VTuple (List.mapi (fun i typ ->
       default_val (name ^ "_" ^ (string_of_int i)) env typ) el)
   | Void -> VNoexpr

@@ -37,6 +37,7 @@ rule token = parse
 | "bool"   { BOOL }
 | "float"  { FLOAT }
 | "qubit"  { QUBIT }
+| "bit"    { BIT  }
 | "void"   { VOID }
 | "true"   { BLIT(true)  }
 | "false"  { BLIT(false) }

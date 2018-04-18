@@ -6,7 +6,7 @@ open Ast
 
 %token SEMI LPAREN RPAREN LBRACE RBRACE COMMA PLUS MINUS TIMES DIVIDE ASSIGN
 %token NOT EQ NEQ LT LEQ GT GEQ AND OR
-%token RETURN IF ELSE FOR WHILE INT BOOL FLOAT QUBIT VOID
+%token RETURN IF ELSE FOR WHILE INT BOOL FLOAT QUBIT BIT VOID
 %token <int> LITERAL
 %token <bool> BLIT
 %token <string> ID FLIT
@@ -57,6 +57,7 @@ typ:
   | BOOL  { Bool  }
   | FLOAT { Float }
   | QUBIT { Qubit }
+  | BIT   { Bit   }
   | VOID  { Void  }
 
 vdecl_list:
