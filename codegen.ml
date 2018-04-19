@@ -29,10 +29,26 @@ type environment = {
   counter : int;
 }
 
+let rec string_of_val = function
+    VInt i -> string_of_int i
+  | VBool b -> string_of_bool b
+  | VFloat f -> string_of_float f
+  | VQubit q -> q
+  | VBit b -> b
+  | VQubitInvalid _ -> "invalid"
+  | VTuple lst -> "(" ^ String.concat ", " (List.map string_of_val lst) ^ ")"
+  | VNoexpr -> "void"
+
 let rec string_of_lval = function
     LVId(n) -> n
   | LVTuple(l, i) -> (string_of_lval l) ^ "[" ^ (string_of_int i) ^ "]"
   | LVValue _ -> raise (Failure "internal error")
+
+let string_of_env env =
+  String.concat ", "
+    (List.map (fun (name, value) -> 
+      name ^ " -> " ^ (string_of_val value)) 
+    (StringMap.bindings env.name_map))
 
 let unwrap_int = function
     env, VInt(i) -> env, i
@@ -261,15 +277,15 @@ let translate functions =
 
   eval_func name args env =
     let func = StringMap.find name function_map in
-    let env = List.fold_left2 (fun env (_, name) arg ->
+    let env' = List.fold_left2 (fun env (_, name) arg ->
       { env with name_map = StringMap.add name arg env.name_map })
     env func.sformals args in
-    let env = List.fold_left (fun env (typ, name) ->
-      { env with name_map =
-        StringMap.add name (default_val name env typ) env.name_map })
-      env func.slocals in
-    let _, sv = eval_stmt env func.sbody in
-    (env, match sv with
+    let env' = List.fold_left (fun env' (typ, name) ->
+      { env' with name_map =
+        StringMap.add name (default_val name env typ) env'.name_map })
+      env' func.slocals in
+    let _, sv = eval_stmt env' func.sbody in
+    ({ env' with name_map = env.name_map }, match sv with
         VNone -> VNoexpr
       | VReturn v -> v)
   in
