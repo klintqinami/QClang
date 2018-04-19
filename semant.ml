@@ -90,8 +90,11 @@ let check functions =
       (* Raise an exception if the given rvalue type cannot be assigned to
        the given lvalue type *)
   let check_assign lvaluet rvaluet err =
-      if lvaluet = rvaluet then lvaluet else raise (Failure err)
-      in   
+      (match lvaluet, rvaluet with
+        Qubit, Bool -> lvaluet
+      | Qubit, Bit  -> lvaluet
+      | _, _ -> if lvaluet = rvaluet then lvaluet else raise (Failure err))
+  in   
 
     (* Build local symbol table of variables for this function *)
     let symbols = List.fold_left (fun m (ty, name) -> StringMap.add name ty m)
