@@ -121,6 +121,20 @@ let translate functions =
           if i = idx then value else prev) old_val) in
         store_lval env new_val lval
     | LVValue _ -> env (* don't do anything if it's not actually an lvalue *)
+  and do_assign env ltype lval rtype rval =  
+      (match ltype, lval, rtype, rval with
+        Qubit, _, Bit, VBit(b) -> 
+            let env, qname = unwrap_qubit (env, (load_lval env lval)) in
+            print_string ("reset " ^ qname ^ ";\n");
+            print_string ("if (" ^ b ^ "==1) x " ^ qname ^ ";\n");
+            env
+      | Qubit, _, Bool, VBool(c) -> 
+            let env, qname = unwrap_qubit (env, (load_lval env lval)) in
+            print_string ("reset " ^ qname ^ ";\n");
+            if (c) then print_string ("x " ^ qname ^ ";\n");
+            env
+      (*| Tuple(lc), _, Tuple(rc), _ -> (store_lval env rval lval)*)
+      | _, _, _, _ -> (store_lval env rval lval) ) 
   and eval_expr env (typ, expr) = match expr with
       SLiteral(i) -> env, VInt i
     | SFliteral(s) -> env, VFloat (float_of_string s)
@@ -199,9 +213,11 @@ let translate functions =
         )
     | SUnop(_, _) -> raise (Failure "sounds like trouble")
     | SAssign(lval, e) ->
-        let env, e' = eval_expr env e in
-        let env, lval = eval_lval env lval in
-        store_lval env e' lval, e'
+            let rtype = fst e in 
+            let ltype = fst lval in
+            let env, e' = eval_expr env e in
+            let env, lval = eval_lval env lval in
+            do_assign env ltype lval rtype e', e'
     | SCall(name, es) ->
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
@@ -222,6 +238,15 @@ let translate functions =
                   print_string ("creg " ^ bname ^ "[1];\n"); 
                   print_string ("measure " ^ q ^ " -> " ^ bname ^ ";\n"); 
                   env, b
+          | "U", [VFloat theta; VFloat phi; VFloat lam; VQubit q] ->
+                  let theta, phi, lam = 
+                      string_of_float theta, 
+                      string_of_float phi, 
+                      string_of_float lam 
+                  in 
+                  print_string 
+                    ("U(" ^ theta ^ ", " ^ phi ^ ", " ^ lam ^ ") " 
+                        ^ q ^ ";\n"); env, VQubit q
           | _ -> eval_func name args { env with counter = env.counter + 1 })
     | SNoexpr -> env, VNoexpr
     | _ -> let env, lval = eval_lval env (typ, expr) in
