@@ -42,6 +42,9 @@ let check functions =
        locals = []; body = [] };
      { typ = Qubit; fname = "hadamard"; formals = [(Qubit, "x")];
        locals = []; body = [] };
+     { typ = Qubit; fname = "U";        formals = [(Float, "x"); (Float, "y"); 
+                                                   (Float, "z"); (Qubit, "x")]; 
+       locals = []; body = [] };
      { typ = Bit;   fname = "measure";  formals = [(Qubit, "x")];
        locals = []; body = [] };
     ]
