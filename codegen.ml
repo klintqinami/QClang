@@ -196,8 +196,10 @@ let translate functions =
           | "hadamard", [VQubit q] ->
                   print_string ("h " ^ q ^ ";\n"); env, VQubit q
           | "measure", [VQubit q] ->
-                  let b = VBit("pie") in
-                  print_string ("measure " ^ q ^ " -> " ^ "pie" ^ ";\n"); 
+                  let bname = q ^ "_mb" ^ string_of_int env.counter in
+                  let b = VBit(bname) in
+                  print_string ("creg " ^ bname ^ "[1];\n"); 
+                  print_string ("measure " ^ q ^ " -> " ^ bname ^ ";\n"); 
                   env, b
           | _ -> eval_func name args { env with counter = env.counter + 1 })
     | SNoexpr -> env, VNoexpr
