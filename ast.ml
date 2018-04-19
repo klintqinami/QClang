@@ -17,6 +17,7 @@ type expr =
   | Binop of expr * op * expr
   | Unop of uop * expr
   | Assign of expr * expr
+  | Deref of expr * expr
   | Call of string * expr list
   | TupleLit of expr list
   | Noexpr
@@ -69,6 +70,7 @@ let rec string_of_expr = function
       string_of_expr e1 ^ " " ^ string_of_op o ^ " " ^ string_of_expr e2
   | Unop(o, e) -> string_of_uop o ^ string_of_expr e
   | Assign(v, e) -> string_of_expr v ^ " = " ^ string_of_expr e
+  | Deref(l, r) -> string_of_expr l ^ "[" ^ string_of_expr r ^ "]"
   | Call(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> ""

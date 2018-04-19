@@ -4,9 +4,10 @@
 open Ast
 %}
 
-%token SEMI LPAREN RPAREN LBRACE RBRACE COMMA PLUS MINUS TIMES DIVIDE ASSIGN
+%token SEMI LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
+%token COMMA PLUS MINUS TIMES DIVIDE ASSIGN
 %token NOT EQ NEQ LT LEQ GT GEQ AND OR
-%token RETURN IF ELSE FOR WHILE INT BOOL FLOAT QUBIT BIT VOID
+%token RETURN IF ELSE FOR WHILE INT BOOL FLOAT QUBIT BIT VOID TUPLE
 %token <int> LITERAL
 %token <bool> BLIT
 %token <string> ID FLIT
@@ -25,6 +26,7 @@ open Ast
 %left PLUS MINUS
 %left TIMES DIVIDE
 %right NOT NEG
+%left LBRACKET
 
 
 %%
@@ -52,12 +54,17 @@ formal_list:
     typ ID                   { [($1,$2)]     }
   | formal_list COMMA typ ID { ($3,$4) :: $1 }
 
+typ_list:
+    typ COMMA typ   { [$3; $1] }
+  | typ_list COMMA typ { $3 :: $1 }
+
 typ:
     INT   { Int   }
   | BOOL  { Bool  }
   | FLOAT { Float }
   | QUBIT { Qubit }
   | BIT   { Bit   }
+  | TUPLE LPAREN typ_list RPAREN { Tuple(List.rev $3) }
   | VOID  { Void  }
 
 vdecl_list:
@@ -105,6 +112,7 @@ expr:
   | MINUS expr %prec NEG          { Unop(Neg, $2)  }
   | NOT expr                      { Unop(Not, $2)  }
   | expr ASSIGN expr              { Assign($1, $3) }
+  | expr LBRACKET expr RBRACKET   { Deref($1, $3)  }
   | ID LPAREN args_opt RPAREN     { Call($1, $3)   }
   | LPAREN expr RPAREN            { $2             }
   | LPAREN tup_args RPAREN        { TupleLit($2)   }

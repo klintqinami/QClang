@@ -101,6 +101,12 @@ let check functions =
       with Not_found -> raise (Failure ("undeclared identifier " ^ s))
     in
 
+    let check_const_int = function
+        Literal i -> i
+      | _ as e ->
+          raise (Failure
+            ("expected literal integer, but found " ^ (string_of_expr e)))
+    in
 
     (* Return a semantically-checked expression, i.e., with a type *)
     let rec lexpr required = function
@@ -151,6 +157,17 @@ let check functions =
                    string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                    string_of_typ t2 ^ " in " ^ string_of_expr e))
           in (ty, SBinop((t1, e1'), op, (t2, e2')))
+      | Deref(l, r) as e ->
+          let (lt, _) as l' = expr l and
+              r' = expr r in
+          ((match lt with
+              Tuple(typs) ->
+                let idx = check_const_int r in
+                List.nth typs idx
+            | _ -> raise (Failure
+                ("cannot dereference " ^ (string_of_typ lt) ^ " in " ^
+                (string_of_expr e)))),
+            SDeref(l', r'))
       | Call(fname, args) as call -> 
           let fd = find_func fname in
           let param_length = List.length fd.formals in

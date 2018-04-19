@@ -8,7 +8,7 @@ module StringMap = Map.Make(String)
 
 type lvalue =
     LVId of string
-  | LVTuple of lvalue * int
+  | LVDeref of lvalue * int
   | LVValue of value
 and value =
     VInt of int
@@ -41,7 +41,7 @@ let rec string_of_val = function
 
 let rec string_of_lval = function
     LVId(n) -> n
-  | LVTuple(l, i) -> (string_of_lval l) ^ "[" ^ (string_of_int i) ^ "]"
+  | LVDeref(l, i) -> (string_of_lval l) ^ "[" ^ (string_of_int i) ^ "]"
   | LVValue _ -> raise (Failure "internal error")
 
 let string_of_env env =
@@ -100,18 +100,22 @@ let translate functions =
   (* convert an expression into an lvalue for loading/storing *)
   let rec eval_lval env ((_, e) as expr) = match e with
       SId(n) -> env, LVId n
+    | SDeref(l, r) ->
+        let env, l' = eval_lval env l in
+        let env, r' = unwrap_int (eval_expr env r) in
+        env, LVDeref(l', r')
     | _ -> let env, value = eval_expr env expr in
         (* by the semantic checker, we should only hit this on the RHS *)
         env, LVValue(value)
   and load_lval env = function
       LVId(s) -> StringMap.find s env.name_map
-    | LVTuple(lval, idx) ->
+    | LVDeref(lval, idx) ->
         let _, value = unwrap_tuple (env, (load_lval env lval)) in
         List.nth value idx
     | LVValue(value) -> value
   and store_lval env value = function
       LVId(s) -> { env with name_map = StringMap.add s value env.name_map }
-    | LVTuple(lval, idx) ->
+    | LVDeref(lval, idx) ->
         let env, old_val = unwrap_tuple (env, (load_lval env lval)) in
         let new_val = VTuple (List.mapi (fun i prev ->
           if i = idx then value else prev) old_val) in
