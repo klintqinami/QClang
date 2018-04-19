@@ -194,9 +194,10 @@ let translate functions =
           | _ -> raise (Failure "bad op")
         )
     | SUnop(_, _) -> raise (Failure "sounds like trouble")
-    | SAssign(name, e) ->
+    | SAssign(lval, e) ->
         let env, e' = eval_expr env e in
-        { env with name_map = StringMap.add name e' env.name_map }, e'
+        let env, lval = eval_lval env lval in
+        store_lval env e' lval, e'
     | SCall(name, es) ->
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
