@@ -326,12 +326,14 @@ let translate functions =
 
   eval_func name args env =
     let func = StringMap.find name function_map in
-    let env' = List.fold_left2 (fun env (_, name) arg ->
-      { env with name_map = StringMap.add name arg env.name_map })
+    let env' = List.fold_left2 (fun env (typ, name) arg ->
+      let env = { env with name_map = StringMap.add name
+        (default_val ("n_" ^ name) env typ) env.name_map } in
+      do_assign env typ (LVId name) arg)
     env func.sformals args in
     let env' = List.fold_left (fun env' (typ, name) ->
       { env' with name_map =
-        StringMap.add name (default_val ("_" ^ name) env typ) env'.name_map })
+        StringMap.add name (default_val ("n_" ^ name) env typ) env'.name_map })
       env' func.slocals in
     let _, sv = eval_stmt env' func.sbody in
     ({ env' with name_map = env.name_map }, match sv with
