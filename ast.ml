@@ -5,7 +5,7 @@ type op = Add | Sub | Mult | Div | Equal | Neq | Less | Leq | Greater | Geq |
 
 type uop = Neg | Not
 
-type typ = Int | Bool | Float | Qubit | Bit | Tuple of typ list | Void 
+type typ = Int | Bool | Float | Qubit | Bit | Tuple of typ list | Array of typ | Void 
 
 type bind = typ * string
 
@@ -19,6 +19,7 @@ type expr =
   | Assign of expr * expr
   | Deref of expr * expr
   | Call of string * expr list
+  | TypeCons of typ * expr list
   | TupleLit of expr list
   | Noexpr
 
@@ -41,6 +42,16 @@ type func_decl = {
 type program = func_decl list
 
 (* Pretty-printing functions *)
+
+let rec string_of_typ = function
+    Int -> "int"
+  | Bool -> "bool"
+  | Float -> "float"
+  | Qubit -> "qubit"
+  | Bit -> "bit"
+  | Tuple(el) -> "(" ^ String.concat ", " (List.map string_of_typ el) ^ ")"
+  | Array(typ) -> (string_of_typ typ) ^ "[]"
+  | Void -> "void"
 
 let string_of_op = function
     Add -> "+"
@@ -73,6 +84,8 @@ let rec string_of_expr = function
   | Deref(l, r) -> string_of_expr l ^ "[" ^ string_of_expr r ^ "]"
   | Call(f, el) ->
       f ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
+  | TypeCons(typ, el) ->
+      (string_of_typ typ) ^ "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
   | Noexpr -> ""
   | TupleLit(el) -> "(" ^ String.concat ", " (List.map string_of_expr el) ^ ")"
 
@@ -88,15 +101,6 @@ let rec string_of_stmt = function
       "for (" ^ string_of_expr e1  ^ " ; " ^ string_of_expr e2 ^ " ; " ^
       string_of_expr e3  ^ ") " ^ string_of_stmt s
   | While(e, s) -> "while (" ^ string_of_expr e ^ ") " ^ string_of_stmt s
-
-let rec string_of_typ = function
-    Int -> "int"
-  | Bool -> "bool"
-  | Float -> "float"
-  | Qubit -> "qubit"
-  | Bit -> "bit"
-  | Tuple(el) -> "(" ^ String.concat ", " (List.map string_of_typ el) ^ ")"
-  | Void -> "void"
 
 let string_of_vdecl (t, id) = string_of_typ t ^ " " ^ id ^ ";\n"
 

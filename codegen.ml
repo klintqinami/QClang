@@ -88,6 +88,7 @@ let rec default_val name env = function
       VBit (bname)
   | Tuple(el) -> VTuple (List.mapi (fun i typ ->
       default_val (name ^ "_" ^ (string_of_int i)) env typ) el)
+  | Array(_) -> VTuple []
   | Void -> VNoexpr
 
 (* Code Generation from the SAST. Returns OpenQASM IR if successful,
@@ -218,6 +219,24 @@ let translate functions =
             let env, e' = eval_expr env e in
             let env, lval = eval_lval env lval in
             do_assign env ltype lval rtype e', e'
+    | STypeCons(typ, args) ->
+        (match typ, args with
+            Array(typ), [len] ->
+              let env, len = unwrap_int (eval_expr env len) in
+              (* helper function to apply f n times to init *)
+              let rec applyn f n init =
+                if n = 0 then init else
+                  applyn f (n - 1) (f init)
+              in
+              let env, vals = applyn (fun (env, vals) ->
+                let counter = env.counter in
+                let env = { env with counter = env.counter + 1 } in
+                let value =
+                  default_val ("temp" ^ (string_of_int counter)) env typ in
+                env, value :: vals) len (env, [])
+              in
+              env, VTuple(vals)
+          | _ -> raise (Failure "internal error"))
     | SCall(name, es) ->
         let env, args = List.fold_right (fun e (env, args) ->
           let env, arg = eval_expr env e in (env, arg :: args))
@@ -312,7 +331,7 @@ let translate functions =
     env func.sformals args in
     let env' = List.fold_left (fun env' (typ, name) ->
       { env' with name_map =
-        StringMap.add name (default_val name env typ) env'.name_map })
+        StringMap.add name (default_val ("_" ^ name) env typ) env'.name_map })
       env' func.slocals in
     let _, sv = eval_stmt env' func.sbody in
     ({ env' with name_map = env.name_map }, match sv with

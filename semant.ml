@@ -117,6 +117,21 @@ let check functions =
     (* Return a semantically-checked expression, i.e., with a type *)
     let rec lexpr required = function
         Id s       -> (type_of_identifier s, SId s)
+      | Deref(l, r) as e ->
+          let (lt, _) as l' = lexpr required l and
+              (rt, _) as r' = expr r in
+          if rt != Int then raise
+            (Failure ("index of " ^ (string_of_expr e) ^ "is not an integer"))
+          else
+            ((match lt with
+                Tuple(typs) ->
+                  let idx = check_const_int r in
+                  List.nth typs idx
+              | Array(typ) -> typ
+              | _ -> raise (Failure
+                  ("cannot dereference " ^ (string_of_typ lt) ^ " in " ^
+                  (string_of_expr e)))),
+              SDeref(l', r'))
       | _ as e -> if required then
             raise (Failure ((string_of_expr e) ^ " is not an lvalue"))
           else
@@ -163,17 +178,14 @@ let check functions =
                    string_of_typ t1 ^ " " ^ string_of_op op ^ " " ^
                    string_of_typ t2 ^ " in " ^ string_of_expr e))
           in (ty, SBinop((t1, e1'), op, (t2, e2')))
-      | Deref(l, r) as e ->
-          let (lt, _) as l' = expr l and
-              r' = expr r in
-          ((match lt with
-              Tuple(typs) ->
-                let idx = check_const_int r in
-                List.nth typs idx
+      | TypeCons(typ, args) as cons ->
+          let args' = List.map expr args in
+          (match typ, args' with
+              Array(_), [(Int, _)] -> ()
             | _ -> raise (Failure
-                ("cannot dereference " ^ (string_of_typ lt) ^ " in " ^
-                (string_of_expr e)))),
-            SDeref(l', r'))
+                ("invalid arguments to type constructor in " ^ (string_of_expr
+                cons))));
+          (typ, STypeCons(typ, args'))
       | Call(fname, args) as call -> 
           let fd = find_func fname in
           let param_length = List.length fd.formals in

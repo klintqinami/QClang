@@ -7,7 +7,7 @@ open Ast
 %token SEMI LPAREN RPAREN LBRACE RBRACE LBRACKET RBRACKET
 %token COMMA PLUS MINUS TIMES DIVIDE ASSIGN
 %token NOT EQ NEQ LT LEQ GT GEQ AND OR
-%token RETURN IF ELSE FOR WHILE INT BOOL FLOAT QUBIT BIT VOID TUPLE
+%token RETURN IF ELSE FOR WHILE INT BOOL FLOAT QUBIT BIT VOID TUPLE NEW
 %token <int> LITERAL
 %token <bool> BLIT
 %token <string> ID FLIT
@@ -65,6 +65,7 @@ typ:
   | QUBIT { Qubit }
   | BIT   { Bit   }
   | TUPLE LPAREN typ_list RPAREN { Tuple(List.rev $3) }
+  | typ LBRACKET RBRACKET { Array($1) }
   | VOID  { Void  }
 
 vdecl_list:
@@ -114,6 +115,7 @@ expr:
   | expr ASSIGN expr              { Assign($1, $3) }
   | expr LBRACKET expr RBRACKET   { Deref($1, $3)  }
   | ID LPAREN args_opt RPAREN     { Call($1, $3)   }
+  | NEW typ LPAREN args_opt RPAREN    { TypeCons($2, $4) }
   | LPAREN expr RPAREN            { $2             }
   | LPAREN tup_args RPAREN        { TupleLit($2)   }
 
