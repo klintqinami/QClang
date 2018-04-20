@@ -122,28 +122,34 @@ let translate functions =
           if i = idx then value else prev) old_val) in
         store_lval env new_val lval
     | LVValue _ -> env (* don't do anything if it's not actually an lvalue *)
-  and do_assign env ltype lval rval =  
-      (match ltype, lval, rval with
-        Qubit, _, VBit(b) -> 
-          let env, qname = unwrap_qubit (env, (load_lval env lval)) in
-          print_string ("reset " ^ qname ^ ";\n");
+  and do_assign env ltype rval =  
+      (match ltype, rval with
+        Qubit, VBit(b) -> 
+          let env, qname = { env with counter = env.counter + 1 },
+                           "temp_" ^ string_of_int env.counter in
+          print_string ("qreg " ^ qname ^ "[1];\n");
           print_string ("if (" ^ b ^ "==1) x " ^ qname ^ ";\n");
-          env
-      | Tuple(ltyps), _, VTuple(vals) ->
-          fst (List.fold_left2 (fun (env, i) ltyp value ->
-            (do_assign env ltyp (LVDeref (lval, i)) value, i + 1))
-          (env, 0) ltyps vals)
-      | Array(ltyp), _, VTuple(vals) ->
-          fst (List.fold_left (fun (env, i) value ->
-            (do_assign env ltyp (LVDeref (lval, i)) value, i))
-          (env, 0) vals)
-      | Qubit, _, VBool(c) -> 
-          let env, qname = unwrap_qubit (env, (load_lval env lval)) in
-          print_string ("reset " ^ qname ^ ";\n");
-          if (c) then print_string ("x " ^ qname ^ ";\n");
-          env
+          env, VQubit(qname)
+      | Tuple(ltyps), VTuple(vals) ->
+          let env, lhs = List.fold_left2 (fun (env, lhs) ltyp value ->
+            let env, value = do_assign env ltyp value in
+            (env, value :: lhs))
+          (env, []) ltyps vals in
+          env, VTuple(List.rev lhs)
+      | Array(ltyp), VTuple(vals) ->
+          let env, lhs = List.fold_left (fun (env, lhs) value ->
+            let env, value = do_assign env ltyp value in
+            (env, value :: lhs))
+          (env, []) vals in
+          env, VTuple(List.rev lhs)
+      | Qubit, VBool(c) -> 
+          let env, qname = { env with counter = env.counter + 1 },
+                           "temp_" ^ string_of_int env.counter in
+          print_string ("qreg " ^ qname ^ "[1];\n");
+          if c then print_string ("x " ^ qname ^ ";\n");
+          env, VQubit(qname)
       (*| Tuple(lc), _, Tuple(rc), _ -> (store_lval env rval lval)*)
-      | _ -> (store_lval env rval lval) ) 
+      | _ -> env, rval) 
   and eval_expr env (typ, expr) = match expr with
       SLiteral(i) -> env, VInt i
     | SFliteral(s) -> env, VFloat (float_of_string s)
@@ -225,7 +231,8 @@ let translate functions =
             let ltype = fst lval in 
             let env, e' = eval_expr env e in
             let env, lval = eval_lval env lval in
-            do_assign env ltype lval e', e'
+            let env, e'' = do_assign env ltype e' in
+            store_lval env e'' lval, e'
     | STypeCons(typ, args) ->
         (match typ, args with
             Array(typ), [len] ->
@@ -336,9 +343,8 @@ let translate functions =
   eval_func name args env =
     let func = StringMap.find name function_map in
     let env' = List.fold_left2 (fun env (typ, name) arg ->
-      let env = { env with name_map = StringMap.add name
-        (default_val ("n_" ^ name) env typ) env.name_map } in
-      do_assign env typ (LVId name) arg)
+      let env, arg = do_assign env typ arg in
+      { env with name_map = StringMap.add name arg env.name_map })
     env func.sformals args in
     let env' = List.fold_left (fun env' (typ, name) ->
       { env' with name_map =

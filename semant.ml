@@ -134,7 +134,10 @@ let check functions =
             ((match lt with
                 Tuple(typs) ->
                   let idx = check_const_int r in
-                  List.nth typs idx
+                  if idx < 0 || idx >= List.length typs then
+                    raise (Failure ("index " ^ (string_of_int idx) ^
+                    " out of bounds in " ^ (string_of_expr e)))
+                  else List.nth typs idx
               | Array(typ) -> typ
               | _ -> raise (Failure
                   ("cannot dereference " ^ (string_of_typ lt) ^ " in " ^
