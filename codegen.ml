@@ -266,6 +266,8 @@ let translate functions =
                   print_string 
                     ("U(" ^ theta ^ ", " ^ phi ^ ", " ^ lam ^ ") " 
                         ^ q ^ ";\n"); env, VQubit q
+          | "CX", [VQubit p; VQubit q] ->
+                  print_string ("CX " ^ p ^ ", " ^ q ^ ";\n"); env, VQubit p
           | _ -> eval_func name args { env with counter = env.counter + 1 })
     | SNoexpr -> env, VNoexpr
     | _ -> let env, lval = eval_lval env (typ, expr) in
