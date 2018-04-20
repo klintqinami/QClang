@@ -1,6 +1,6 @@
 qubit foo(qubit q)
 {
-	return hadamard(q);
+	return !q;
 }
 
 int main() {

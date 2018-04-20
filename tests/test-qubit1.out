@@ -3,4 +3,4 @@ include "qelib1.inc";
 qreg q[1];
 creg c[1];
 h q;
-qreg a_q0[1];
+qreg n_a_q0[1];
