@@ -1,0 +1,18 @@
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[1];
+creg c[1];
+h q;
+qreg n_q1_q0[1];
+qreg n_q2_q0[1];
+qreg n_tuple_0_q0[1];
+qreg n_tuple_1_q0[1];
+h n_q1_q0;
+cx n_q1_q0, n_q2_q0;
+cx n_q1_q0, n_q2_q0;
+h n_q1_q0;
+h n_q2_q0;
+creg n_q1_q0_mb0[1];
+measure n_q1_q0 -> n_q1_q0_mb0;
+creg n_q2_q0_mb1[1];
+measure n_q2_q0 -> n_q2_q0_mb1;

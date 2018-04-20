@@ -264,7 +264,10 @@ let translate functions =
           | "printf", [VFloat f] ->
               print_string ("// " ^ string_of_float f ^ "\n"); env, VNoexpr
           | "hadamard", [VQubit q] ->
-                  print_string ("h " ^ q ^ ";\n"); env, VQubit q
+              print_string ("h " ^ q ^ ";\n"); env, VQubit q
+          | "CX", [VQubit control; VQubit target] ->
+              print_string ("cx " ^ control ^ ", " ^ target ^ ";\n");
+              env, VTuple([VQubit(control); VQubit(target)])
           | "measure", [VQubit q] ->
                   let bname = q ^ "_mb" ^ string_of_int env.counter in
                   let b = VBit(bname) in
@@ -280,8 +283,6 @@ let translate functions =
                   print_string 
                     ("U(" ^ theta ^ ", " ^ phi ^ ", " ^ lam ^ ") " 
                         ^ q ^ ";\n"); env, VQubit q
-          | "CX", [VQubit p; VQubit q] ->
-                  print_string ("CX " ^ p ^ ", " ^ q ^ ";\n"); env, VQubit p
           | _ -> eval_func name args { env with counter = env.counter + 1 })
     | SNoexpr -> env, VNoexpr
     | _ -> let env, lval = eval_lval env (typ, expr) in

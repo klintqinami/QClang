@@ -45,6 +45,9 @@ let check functions =
      { typ = Qubit; fname = "U";        formals = [(Float, "x"); (Float, "y"); 
                                                    (Float, "z"); (Qubit, "x")]; 
        locals = []; body = [] };
+     { typ = Tuple([Qubit; Qubit]); fname = "CX";
+       formals = [(Qubit, "control"); (Qubit, "target")];
+       locals = []; body = []; };
      { typ = Bit;   fname = "measure";  formals = [(Qubit, "x")];
        locals = []; body = [] };
     ]
