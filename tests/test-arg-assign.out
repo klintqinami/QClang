@@ -4,4 +4,7 @@ qreg q[1];
 creg c[1];
 h q;
 qreg n_q_q0[1];
-U(6.2831, 3.14159, 1.5707) n_q_q0;
+qreg temp_1[1];
+x temp_1[0];
+creg temp_1_mb2[1];
+measure temp_1 -> temp_1_mb2;
