@@ -7,6 +7,14 @@
 .PHONY : all
 all : qclang.native
 
+.PHONY: debug
+debug: qclang.d.byte
+
+.PHONY : qclang.d.byte
+qclang.d.byte :
+	ocamlbuild -use-ocamlfind -tag thread -cflags -w,+a-4 \
+qclang.d.byte
+
 .PHONY : qclang.native
 qclang.native :
 	rm -f *.o

@@ -122,20 +122,28 @@ let translate functions =
           if i = idx then value else prev) old_val) in
         store_lval env new_val lval
     | LVValue _ -> env (* don't do anything if it's not actually an lvalue *)
-  and do_assign env ltype lval rtype rval =  
-      (match ltype, lval, rtype, rval with
-        Qubit, _, Bit, VBit(b) -> 
-            let env, qname = unwrap_qubit (env, (load_lval env lval)) in
-            print_string ("reset " ^ qname ^ ";\n");
-            print_string ("if (" ^ b ^ "==1) x " ^ qname ^ ";\n");
-            env
-      | Qubit, _, Bool, VBool(c) -> 
-            let env, qname = unwrap_qubit (env, (load_lval env lval)) in
-            print_string ("reset " ^ qname ^ ";\n");
-            if (c) then print_string ("x " ^ qname ^ ";\n");
-            env
+  and do_assign env ltype lval rval =  
+      (match ltype, lval, rval with
+        Qubit, _, VBit(b) -> 
+          let env, qname = unwrap_qubit (env, (load_lval env lval)) in
+          print_string ("reset " ^ qname ^ ";\n");
+          print_string ("if (" ^ b ^ "==1) x " ^ qname ^ ";\n");
+          env
+      | Tuple(ltyps), _, VTuple(vals) ->
+          fst (List.fold_left2 (fun (env, i) ltyp value ->
+            (do_assign env ltyp (LVDeref (lval, i)) value, i + 1))
+          (env, 0) ltyps vals)
+      | Array(ltyp), _, VTuple(vals) ->
+          fst (List.fold_left (fun (env, i) value ->
+            (do_assign env ltyp (LVDeref (lval, i)) value, i))
+          (env, 0) vals)
+      | Qubit, _, VBool(c) -> 
+          let env, qname = unwrap_qubit (env, (load_lval env lval)) in
+          print_string ("reset " ^ qname ^ ";\n");
+          if (c) then print_string ("x " ^ qname ^ ";\n");
+          env
       (*| Tuple(lc), _, Tuple(rc), _ -> (store_lval env rval lval)*)
-      | _, _, _, _ -> (store_lval env rval lval) ) 
+      | _ -> (store_lval env rval lval) ) 
   and eval_expr env (typ, expr) = match expr with
       SLiteral(i) -> env, VInt i
     | SFliteral(s) -> env, VFloat (float_of_string s)
@@ -214,11 +222,10 @@ let translate functions =
         )
     | SUnop(_, _) -> raise (Failure "sounds like trouble")
     | SAssign(lval, e) ->
-            let rtype = fst e in 
-            let ltype = fst lval in
+            let ltype = fst lval in 
             let env, e' = eval_expr env e in
             let env, lval = eval_lval env lval in
-            do_assign env ltype lval rtype e', e'
+            do_assign env ltype lval e', e'
     | STypeCons(typ, args) ->
         (match typ, args with
             Array(typ), [len] ->
@@ -256,7 +263,7 @@ let translate functions =
                   let b = VBit(bname) in
                   print_string ("creg " ^ bname ^ "[1];\n"); 
                   print_string ("measure " ^ q ^ " -> " ^ bname ^ ";\n"); 
-                  env, b
+                  { env with counter = env.counter + 1 }, b
           | "U", [VFloat theta; VFloat phi; VFloat lam; VQubit q] ->
                   let theta, phi, lam = 
                       string_of_float theta, 

@@ -89,10 +89,18 @@ let check functions =
 
       (* Raise an exception if the given rvalue type cannot be assigned to
        the given lvalue type *)
-  let check_assign lvaluet rvaluet err =
+  let rec check_assign lvaluet rvaluet err =
       (match lvaluet, rvaluet with
         Qubit, Bool -> lvaluet
       | Qubit, Bit  -> lvaluet
+      | Tuple(ltyps), Tuple(rtyps) ->
+          if List.length ltyps != List.length rtyps then
+            raise (Failure err)
+          else
+            Tuple(List.map2 (fun ltyp rtyp ->
+              check_assign ltyp rtyp err) ltyps rtyps)
+      | Array(ltyp), Array(rtyp) ->
+          Array(check_assign ltyp rtyp err)
       | _, _ -> if lvaluet = rvaluet then lvaluet else raise (Failure err))
   in   
 
