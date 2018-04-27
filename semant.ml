@@ -223,7 +223,7 @@ let check functions =
       let (t', e') = expr e
       and err = "expected Boolean expression in " ^ string_of_expr e
       in if t' != Bool then raise (Failure err) else (t', e') 
-      in
+    in
 
     (* Return a semantically-checked statement i.e. containing sexprs *)
     let rec check_stmt = function
@@ -250,14 +250,66 @@ let check functions =
             | s :: ss         -> check_stmt s :: check_stmt_list ss
             | []              -> []
           in SBlock(check_stmt_list sl)
+    in
+
+    let vectorize func = 
+      let counter = ref 0 in
+      let temps = ref ([] : (typ * String.t) list) in
+      let rec flatten_call (typ, e) = match e with
+          SCall(name, args) ->
+            let args', stmts = List.split (List.map flatten_call args) in
+            let stmts = List.flatten stmts in
+            let tmp = "@tmp" ^ string_of_int !counter in
+            counter := !counter + 1;
+            temps := (typ, tmp) :: !temps;
+            ((typ, SId(tmp)), stmts @
+              [SExpr(typ, SAssign((typ, SId(tmp)), (typ, SCall(name, args'))))])
+        | STupleLit(el) ->
+            let el', stmts = List.split (List.map flatten_call el) in
+            let stmts = List.flatten stmts in
+            ((typ, STupleLit(el')), stmts)
+        | SBinop(e1, op, e2) ->
+            let e1, stmt1 = flatten_call e1 in
+            let e2, stmt2 = flatten_call e2 in
+            ((typ, SBinop(e1, op, e2)), stmt1 @ stmt2)
+        | SUnop(op, e) ->
+            let e, stmts = flatten_call e in
+            ((typ, SUnop(op, e)), stmts)
+        | SAssign(lhs, rhs) ->
+            let rhs, rstmts = flatten_call rhs in
+            let lhs, lstmts = flatten_call lhs in
+            (rhs, rstmts @ lstmts @ [SExpr(typ, (SAssign(lhs, rhs)))])
+        | SDeref(lhs, rhs) ->
+            let rhs, rstmts = flatten_call rhs in
+            let lhs, lstmts = flatten_call lhs in
+            ((typ, SDeref(lhs, rhs)), lstmts @ rstmts)
+        | STypeCons(typ', el) ->
+            let el', stmts = List.split (List.map flatten_call el) in
+            let stmts = List.flatten stmts in
+            ((typ, STypeCons(typ', el')), stmts)
+        | _ as e -> ((typ, e), [])
+      in
+
+      let rec flatten_stmt = function
+          SExpr e -> SBlock (snd (flatten_call e))
+        | SBlock el -> SBlock (List.map flatten_stmt el)
+        | SIf(p, b1, b2) -> SIf(p, flatten_stmt b1, flatten_stmt b2)
+        | SFor(e1, e2, e3, st) -> SFor(e1, e2, e3, flatten_stmt st)
+        | SWhile(p, s) -> SWhile(p, flatten_stmt s)
+        | SReturn e -> let e, stmts = flatten_call e in
+            SBlock(stmts @ [SReturn(e)])
+      in
+      { func with sbody = flatten_stmt func.sbody;
+        slocals = !temps @ func.slocals }
 
     in (* body of check_function *)
     let sbody = check_stmt (Block func.body)
     in
-    { styp = func.typ;
+    let sfunc = { styp = func.typ;
       sfname = func.fname;
       sformals = formals';
       slocals  = locals';
       sbody = sbody;
-     }
-    in List.map check_function functions
+     } 
+    in vectorize sfunc
+  in List.map check_function functions
