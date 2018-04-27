@@ -9,14 +9,12 @@ int main() {
 
     /* Create Qubit array for oracle query */
     strlen = 10;
-    test_bits = new qubit[](strlen);
     measure_bits = new bit[](strlen);
 
     /* Create superposition state */
-    test_bits = hadamard(test_bits);
+    test_bits = hadamard(new qubit[](strlen));
 
-    answer = false;
-    answer = hadamard(answer);
+    answer = hadamard(true);
 
     /* Query oracle  */
     answer = !answer;

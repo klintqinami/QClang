@@ -92,21 +92,28 @@ let check functions =
       let formals' = check_binds "formal" func.formals in
       let locals' = check_binds "local" func.locals in
 
-      (* Raise an exception if the given rvalue type cannot be assigned to
-       the given lvalue type *)
-  let rec check_assign lvaluet rvaluet err =
-      (match lvaluet, rvaluet with
-        Qubit, Bool -> lvaluet
-      | Qubit, Bit  -> lvaluet
-      | Tuple(ltyps), Tuple(rtyps) ->
-          if List.length ltyps != List.length rtyps then
-            raise (Failure err)
-          else
-            Tuple(List.map2 (fun ltyp rtyp ->
-              check_assign ltyp rtyp err) ltyps rtyps)
-      | Array(ltyp), Array(rtyp) ->
-          Array(check_assign ltyp rtyp err)
-      | _, _ -> if lvaluet = rvaluet then lvaluet else raise (Failure err))
+  (* Raise an exception if the given rvalue type cannot be assigned to
+   the given lvalue type *)
+  let check_assign lvaluet rvalue err =
+      let rec check_assign_int lvaluet rvaluet =
+        (match lvaluet, rvaluet with
+          Qubit, Bool -> ()
+        | Qubit, Bit -> ()
+        | Tuple(ltyps), Tuple (rtyps) ->
+            if List.length ltyps != List.length rtyps then
+              raise (Failure err)
+            else
+              List.iter2 (fun ltyp rtyp ->
+                check_assign_int ltyp rtyp) ltyps rtyps
+        | Array(ltyp), Array(rtyp) ->
+            check_assign_int ltyp rtyp
+        | _, _ -> if lvaluet = rvaluet then () else raise (Failure err));
+      in
+      check_assign_int lvaluet (fst rvalue);
+      if lvaluet = fst rvalue then
+        rvalue
+      else
+        lvaluet, STypeConvert(lvaluet, rvalue)
   in   
 
     (* Build local symbol table of variables for this function *)
@@ -170,7 +177,7 @@ let check functions =
           and (rt, _) as e' = expr e in
           let err = "illegal assignment " ^ string_of_typ lt ^ " = " ^ 
             string_of_typ rt ^ " in " ^ string_of_expr ex
-          in (check_assign lt rt err, SAssign(var', e'))
+          in (lt, SAssign(var', check_assign lt e' err))
       | Unop(op, e) as ex -> 
           let (t, e') = expr e in
           let ty = match op with
@@ -228,7 +235,7 @@ let check functions =
                     raise (Failure ("array expected in call to length, got " ^
                     string_of_expr e))
               else
-                ((check_assign ft et err, e') :: args, vectorized)
+                (check_assign ft (et, e') err :: args, vectorized)
             in 
             let args', vectorized =
               List.fold_left2 check_call ([], false) fd.formals args in

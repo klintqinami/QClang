@@ -263,11 +263,9 @@ let translate functions =
         )
     | SUnop(_, _) -> raise (Failure "sounds like trouble")
     | SAssign(lval, e) ->
-            let ltype = fst lval in 
-            let env, e' = eval_expr env e in
-            let env, lval = eval_lval env lval in
-            let env, e'' = do_assign env ltype e' in
-            store_lval env e'' lval, e'
+        let env, e' = eval_expr env e in
+        let env, lval = eval_lval env lval in
+        store_lval env e' lval, e'
     | STypeCons(typ, args) ->
         (match typ, args with
             Array(typ), [len] ->
@@ -320,6 +318,9 @@ let translate functions =
                         ^ q ^ ";\n"); env, VQubit q
           | "length", [VTuple lst] -> env, VInt (List.length lst)
           | _ -> eval_func name args { env with counter = env.counter + 1 })
+    | STypeConvert(ltyp, rexp) ->
+        let env, rval = eval_expr env rexp in
+        do_assign env ltyp rval
     | SNoexpr -> env, VNoexpr
     | _ -> let env, lval = eval_lval env (typ, expr) in
         load_lval_check env lval
@@ -372,8 +373,7 @@ let translate functions =
 
   eval_func name args env =
     let func = StringMap.find name function_map in
-    let env' = List.fold_left2 (fun env (typ, name) arg ->
-      let env, arg = do_assign env typ arg in
+    let env' = List.fold_left2 (fun env (_, name) arg ->
       { env with name_map = StringMap.add name arg env.name_map })
     env func.sformals args in
     let env' = List.fold_left (fun env' (typ, name) ->
