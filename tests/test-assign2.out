@@ -4,7 +4,7 @@ qreg q[1];
 creg c[1];
 h q;
 creg tmp0_bt0[1];
-qreg q_q0[1];
+qreg q_0_qt0[1];
 creg b_b0[1];
 qreg temp_0[1];
 x temp_0;

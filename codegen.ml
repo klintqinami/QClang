@@ -80,14 +80,22 @@ let rec default_val name env = function
     Int -> VInt 0
   | Bool -> VBool false
   | Float -> VFloat 0.
-  | Qubit -> let qname = name ^ "_q" ^ string_of_int env.counter in
+  | Qubit -> let qname = 
+      (if String.contains name '@' then
+        String.sub name 1 (String.length name - 1) ^ "_qt"
+      else name ^ "_q") ^ string_of_int env.counter in
       print_string ("qreg " ^ qname ^ "[1];\n");
       VQubit (qname)
-  | Bit -> let bname = name ^ "_b" ^ string_of_int env.counter in
+  | Bit -> let bname =
+      (if String.contains name '@' then
+        String.sub name 1 (String.length name - 1) ^ "_bt"
+      else name ^ "_b") ^ string_of_int env.counter in
       print_string ("creg " ^ bname ^ "[1];\n");
       VBit (bname)
   | Tuple(el) -> VTuple (List.mapi (fun i typ ->
-      default_val (name ^ "_" ^ (string_of_int i)) env typ) el)
+      default_val
+        ((if String.contains name '@' then name else "@" ^ name)
+        ^ "_" ^ (string_of_int i)) env typ) el)
   | Array(_) -> VTuple []
   | Void -> VNoexpr
 
@@ -246,7 +254,7 @@ let translate functions =
                 let counter = env.counter in
                 let env = { env with counter = env.counter + 1 } in
                 let value =
-                  default_val ("temp" ^ (string_of_int counter)) env typ in
+                  default_val ("@constemp" ^ (string_of_int counter)) env typ in
                 env, value :: vals) len (env, [])
               in
               env, VTuple(vals)
@@ -349,7 +357,7 @@ let translate functions =
     env func.sformals args in
     let env' = List.fold_left (fun env' (typ, name) ->
       { env' with name_map =
-        StringMap.add name (default_val ("n_" ^ name) env typ) env'.name_map })
+        StringMap.add name (default_val name env typ) env'.name_map })
       env' func.slocals in
     let _, sv = eval_stmt env' func.sbody in
     ({ env' with name_map = env.name_map }, match sv with
