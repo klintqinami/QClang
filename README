@@ -10,3 +10,6 @@ C programming language and other modern languages. These features, coupled with
 its higher-level control flow and abstraction, allow for a large reduction in 
 the number of statements required to implement sophisticated quantum computing
 algorithms when compared to an equivalent implementation in Open QASM.
+
+The regression test suite included offers examples of valid and invalid QClang
+programs.
