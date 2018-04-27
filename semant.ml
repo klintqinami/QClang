@@ -148,6 +148,10 @@ let check functions =
                   ("cannot dereference " ^ (string_of_typ lt) ^ " in " ^
                   (string_of_expr e)))),
               SDeref(l', r'))
+      | TupleLit(el) -> 
+          let el' = List.map (fun e -> lexpr required e) el in
+          let types = List.map fst el' in
+          (Tuple(types), STupleLit(el'))
       | _ as e -> if required then
             raise (Failure ((string_of_expr e) ^ " is not an lvalue"))
           else

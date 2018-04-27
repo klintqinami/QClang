@@ -9,6 +9,7 @@ module StringMap = Map.Make(String)
 type lvalue =
     LVId of string
   | LVDeref of lvalue * int
+  | LVTuple of lvalue list
   | LVValue of value
 and value =
     VInt of int
@@ -42,6 +43,7 @@ let rec string_of_val = function
 let rec string_of_lval = function
     LVId(n) -> n
   | LVDeref(l, i) -> (string_of_lval l) ^ "[" ^ (string_of_int i) ^ "]"
+  | LVTuple(ll) -> "(" ^ String.concat ", " (List.map string_of_lval ll) ^ ")"
   | LVValue _ -> raise (Failure "internal error")
 
 let string_of_env env =
@@ -113,22 +115,48 @@ let translate functions =
         let env, l' = eval_lval env l in
         let env, r' = unwrap_int (eval_expr env r) in
         env, LVDeref(l', r')
+    | STupleLit(el) ->
+        let env, el' = List.fold_left (fun (env, el') e ->
+          let env, e' = eval_lval env e in
+          (env, e' :: el')) (env, []) el in
+        let el' = List.rev el' in
+        env, LVTuple(el')
     | _ -> let env, value = eval_expr env expr in
         (* by the semantic checker, we should only hit this on the RHS *)
         env, LVValue(value)
   and load_lval env = function
-      LVId(s) -> StringMap.find s env.name_map
+      LVId(s) -> env, StringMap.find s env.name_map
     | LVDeref(lval, idx) ->
-        let _, value = unwrap_tuple (env, (load_lval env lval)) in
-        List.nth value idx
-    | LVValue(value) -> value
+        let env, value = unwrap_tuple (load_lval env lval) in
+        env, List.nth value idx
+    | LVTuple(el) ->
+        let env, el' = List.fold_left (fun (env, el') e ->
+          let env, e' = load_lval_check env e in
+          env, e' :: el') (env, []) el in
+        let el' = List.rev el' in
+        env, VTuple(el')
+    | LVValue(value) -> env, value
+  and load_lval_check env lval =
+    let env, value = load_lval env lval in
+    (match value with
+        VQubit _ -> (store_lval env (VQubitInvalid lval) lval)
+      | VQubitInvalid(var) ->
+          raise (Failure 
+            ("qubit " ^ (string_of_lval var) ^ " used more than once"))
+      | _ -> env), value
   and store_lval env value = function
       LVId(s) -> { env with name_map = StringMap.add s value env.name_map }
     | LVDeref(lval, idx) ->
-        let env, old_val = unwrap_tuple (env, (load_lval env lval)) in
+        let env, old_val = unwrap_tuple (load_lval env lval) in
         let new_val = VTuple (List.mapi (fun i prev ->
           if i = idx then value else prev) old_val) in
         store_lval env new_val lval
+    | LVTuple(lvals) ->
+        (match value with
+            VTuple(vals) -> List.fold_left2
+              (fun env value lval -> store_lval env value lval)
+              env vals lvals
+          | _ -> raise (Failure "internal error"))
     | LVValue _ -> env (* don't do anything if it's not actually an lvalue *)
   and do_assign env ltype rval =  
       (match ltype, rval with
@@ -156,7 +184,6 @@ let translate functions =
           print_string ("qreg " ^ qname ^ "[1];\n");
           if c then print_string ("x " ^ qname ^ ";\n");
           env, VQubit(qname)
-      (*| Tuple(lc), _, Tuple(rc), _ -> (store_lval env rval lval)*)
       | _ -> env, rval) 
   and eval_expr env (typ, expr) = match expr with
       SLiteral(i) -> env, VInt i
@@ -295,14 +322,7 @@ let translate functions =
           | _ -> eval_func name args { env with counter = env.counter + 1 })
     | SNoexpr -> env, VNoexpr
     | _ -> let env, lval = eval_lval env (typ, expr) in
-        let value = load_lval env lval in
-        match value with
-            VQubitInvalid(var) ->
-              raise (Failure 
-                ("qubit " ^ (string_of_lval var) ^ " used more than once"))
-          | _ ->
-            (if typ = Qubit then store_lval env (VQubitInvalid lval) lval else env),
-            value
+        load_lval_check env lval
 
   and
 
