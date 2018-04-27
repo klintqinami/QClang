@@ -50,6 +50,8 @@ let check functions =
        locals = []; body = []; };
      { typ = Bit;   fname = "measure";  formals = [(Qubit, "x")];
        locals = []; body = [] };
+     { typ = Int;   fname = "length"; formals = [(Int, "arr")]; (* dummy *)
+       locals = []; body = []; };
     ]
   in
 
@@ -208,14 +210,26 @@ let check functions =
                         " arguments in " ^ string_of_expr call))
 
           else
-            let check_call (ft, _) e = 
+            let check_call (args, vectorized) (ft, _) e = 
               let (et, e') = expr e in 
               let err = "illegal argument found " ^ string_of_typ et ^
                 " expected " ^ string_of_typ ft ^ " in " ^ string_of_expr e
-              in (check_assign ft et err, e')
+              in
+              if et = Array(Qubit) && ft = Qubit then
+                ((Array(Qubit), e') :: args, true)
+              else if fname = "length" then
+                match et with
+                    Array(_) -> ([(et, e')], false)
+                  | _ ->
+                    raise (Failure ("array expected in call to length, got " ^
+                    string_of_expr e))
+              else
+                ((check_assign ft et err, e') :: args, vectorized)
             in 
-            let args' = List.map2 check_call fd.formals args
-            in (fd.typ, SCall(fname, args'))
+            let args', vectorized =
+              List.fold_left2 check_call ([], false) fd.formals args in
+            let args' = List.rev args'
+            in ((if vectorized then Array(fd.typ) else fd.typ), SCall(fname, args'))
       | _ as e -> lexpr false e
     in
 
@@ -255,6 +269,50 @@ let check functions =
     let vectorize func = 
       let counter = ref 0 in
       let temps = ref ([] : (typ * String.t) list) in
+
+      let vectorize_call func args dest =
+        let index = "@tmpidx" ^ string_of_int !counter in
+        counter := !counter + 1;
+        temps := (Int, index) :: !temps;
+        (* find an example of one thing that needs to be vectorized, to compute
+         * the number of iterations of the for loop and the size of the output
+         * array.
+         *)
+        let arr = List.fold_left2 (fun arr ((argtyp, _) as arg) (ftyp, _) ->
+          if ftyp = Qubit && argtyp = Array(Qubit) then
+            Some arg
+          else
+            arr) None args func.formals in
+        let arr = match arr with
+            Some a -> a
+          | None ->
+              raise (Failure "internal error foo")
+        in
+        SBlock([
+          (* dest = qubit[](length(arr)); *)
+          SExpr(Array(func.typ),
+                SAssign((Array(func.typ), SId(dest)),
+                        (Array(func.typ),
+                         STypeCons(Array(func.typ),
+                                   [(Int, SCall("length", [arr]))]))));
+          (* for (index = 0; index < length(arr); index++) *)
+          SFor((Int, SAssign((Int, SId(index)), (Int, SLiteral 0))),
+               (Bool, SBinop((Int, SId(index)), Less,
+                  (Int, SCall("length", [arr])))),
+               (Int, SAssign((Int, SId(index)),
+                  (Int, SBinop((Int, SId(index)), Add, (Int, SLiteral(1)))))),
+               (* loop body: dest[index] = func(...); *)
+               SExpr(func.typ, 
+                SAssign((func.typ, SDeref((Array(func.typ), SId(dest)),
+                                          (Int, SId(index)))),
+                        (func.typ, SCall(func.fname,
+                          List.map2 (fun (ftyp, _) ((argtyp, _) as e) ->
+                            if ftyp = Qubit && argtyp == Array(Qubit) then
+                              (Qubit, SDeref(e, (Int, SId(index))))
+                            else
+                              e) func.formals args)))))])
+      in
+
       let rec flatten_call (typ, e) = match e with
           SCall(name, args) ->
             let args', stmts = List.split (List.map flatten_call args) in
@@ -262,8 +320,15 @@ let check functions =
             let tmp = "@tmp" ^ string_of_int !counter in
             counter := !counter + 1;
             temps := (typ, tmp) :: !temps;
-            ((typ, SId(tmp)), stmts @
-              [SExpr(typ, SAssign((typ, SId(tmp)), (typ, SCall(name, args'))))])
+            let func = find_func name in
+            let need_vectorize = typ != func.typ in
+            let stmt = if need_vectorize then
+              vectorize_call func args tmp
+            else
+              (* @tmp = func(args) *)
+              SExpr(typ, SAssign((typ, SId(tmp)), (typ, SCall(name, args'))))
+            in
+            ((typ, SId(tmp)), stmts @ [stmt])
         | STupleLit(el) ->
             let el', stmts = List.split (List.map flatten_call el) in
             let stmts = List.flatten stmts in

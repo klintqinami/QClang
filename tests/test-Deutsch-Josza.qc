@@ -13,25 +13,19 @@ int main() {
     measure_bits = new bit[](strlen);
 
     /* Create superposition state */
-    for (i = 0; i < strlen; i = i + 1) {
-        test_bits[i] = hadamard(test_bits[i]);
-    } 
+    test_bits = hadamard(test_bits);
 
-    answer = !answer;
+    answer = false;
     answer = hadamard(answer);
 
     /* Query oracle  */
     answer = !answer;
 
     /* Apply hadamard again */
-    for (i = 0; i < strlen; i = i + 1) {
-        test_bits[i] = hadamard(test_bits[i]);
-    } 
+    test_bits = hadamard(test_bits);
 
     /* Measure */
-    for (i = 0; i < strlen; i = i + 1) {
-        measure_bits[i] = measure(test_bits[i]);
-    } 
+    measure_bits = measure(test_bits);
 
     return 0;
 }
