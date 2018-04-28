@@ -8,5 +8,6 @@ int main() {
 	
 	q = foo(false);
 	measure(q);
+	return 0;
 }
 
