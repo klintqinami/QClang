@@ -213,6 +213,15 @@ let check functions =
                 ("invalid arguments to type constructor in " ^ (string_of_expr
                 cons))));
           (typ, STypeCons(typ, args'))
+      | Call("barrier", args) ->
+          let args = List.map (fun e ->
+            let (typ, _) as e' = expr e in
+            if typ <> Qubit then
+              raise (Failure
+                ("argument " ^ string_of_expr e ^ " to barrier is not a qubit"))
+            else
+              e') args in
+          (Tuple(List.map fst args), SBarrier(args))
       | Call(fname, args) as call -> 
           let fd = find_func fname in
           let param_length = List.length fd.formals in

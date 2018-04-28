@@ -308,6 +308,14 @@ let translate functions =
                         ^ q ^ ";\n"); env, VQubit q
           | "length", [VTuple lst] -> env, VInt (List.length lst)
           | _ -> eval_func name args { env with counter = env.counter + 1 })
+    | SBarrier(es) ->
+        let env, args = List.fold_right (fun e (env, args) ->
+          let env, arg = eval_expr env e in (env, arg :: args))
+        es (env, []) in
+        print_string ("barrier " ^ String.concat ", " (List.map (function
+            VQubit name -> name
+          | _ -> raise (Failure "internal error")) args) ^ ";\n");
+        env, VTuple(args)
     | STypeConvert(ltyp, rexp) ->
         let env, rval = eval_expr env rexp in
         do_assign env ltyp rval

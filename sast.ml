@@ -14,6 +14,7 @@ and sx =
   | SAssign of sexpr * sexpr
   | SDeref of sexpr * sexpr
   | SCall of string * sexpr list
+  | SBarrier of sexpr list
   | STypeCons of typ * sexpr list
   | STypeConvert of typ * sexpr
   | SNoexpr
@@ -55,6 +56,8 @@ let rec string_of_sexpr (t, e) =
   | STypeCons(typ, el) ->
       (string_of_typ typ) ^ "(" ^ String.concat ", "
         (List.map string_of_sexpr el) ^ ")"
+  | SBarrier(el) ->
+      "barrier(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ")"
   | STypeConvert(typ, rval) ->
       "@convert(" ^ string_of_typ typ ^ ", " ^ string_of_sexpr rval ^ ")"
   | STupleLit(el) -> "(" ^ String.concat ", " (List.map string_of_sexpr el) ^ ")"
