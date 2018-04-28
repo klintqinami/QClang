@@ -339,7 +339,8 @@ let check functions =
 
       let rec flatten_call (typ, e) = match e with
           SCall(name, args) ->
-            let args, stmts = List.split (List.map flatten_call args) in
+            let args, stmts = List.split (List.rev_map flatten_call args) in
+            let args = List.rev args in
             let stmts = List.flatten stmts in
             let tmp = get_tmp typ "functmp" in
             let func = find_func name in

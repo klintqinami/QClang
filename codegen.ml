@@ -132,7 +132,7 @@ let translate functions =
         VQubit _ -> (store_lval env VQubitInvalid lval)
       | VQubitInvalid ->
           raise (Failure 
-            ("qubit " ^ (string_of_lval lval) ^ "undefined or used more than once"))
+            ("qubit " ^ (string_of_lval lval) ^ " undefined or used more than once"))
       | _ -> env), value
   and store_lval env value = function
       LVId(s) -> { env with name_map = StringMap.add s value env.name_map }

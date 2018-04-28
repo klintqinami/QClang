@@ -3,5 +3,5 @@ include "qelib1.inc";
 qreg q[1];
 creg c[1];
 h q;
-qreg n_q_q0[1];
-U(6.2831, 3.14159, 1.5707) n_q_q0;
+qreg temp_0[1];
+U(6.2831, 3.14159, 1.5707) temp_0;

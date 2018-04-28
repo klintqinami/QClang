@@ -1,1 +1,1 @@
-Fatal error: exception Failure("qubit b used more than once")
+Fatal error: exception Failure("qubit b undefined or used more than once")
