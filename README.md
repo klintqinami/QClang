@@ -1,3 +1,5 @@
+# QClang: High-Level Quantum Computing Language
+
 QClang is a high-level, imperative programming language intended for the 
 implementation and rapid prototyping of quantum algorithms. Its features 
 include user-defined functions, unitary gates, quantum and classical data 
