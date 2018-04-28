@@ -255,6 +255,10 @@ let translate functions =
     | SAssign(lval, e) ->
         let env, e' = eval_expr env e in
         let env, lval = eval_lval env lval in
+        (*
+        print_string ("// storing " ^ string_of_val e' ^ " to " ^ string_of_lval
+        lval ^ "\n");
+        *)
         store_lval env e' lval, e'
     | STypeCons(typ, args) ->
         (match typ, args with
@@ -384,7 +388,11 @@ let translate functions =
       env' func.slocals in
     let env', sv = eval_stmt env' func.sbody in
     ({ env' with name_map = env.name_map }, match sv with
-        VNone -> VNoexpr
+        VNone -> if func.styp = Void then
+            VNoexpr
+          else
+            raise (Failure
+              ("function " ^ func.sfname ^ " didn't return a value"))
       | VReturn v -> v)
   in
 
