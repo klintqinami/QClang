@@ -281,65 +281,76 @@ let check functions =
       let counter = ref 0 in
       let temps = ref ([] : (typ * String.t) list) in
 
-      let vectorize_call func args dest =
-        let index = "@tmpidx" ^ string_of_int !counter in
+      let get_tmp typ name =
+        let id = "@" ^ name ^ string_of_int !counter in
         counter := !counter + 1;
-        temps := (Int, index) :: !temps;
-        (* find an example of one thing that needs to be vectorized, to compute
+        temps := (typ, id) :: !temps;
+        (typ, SId(id))
+      in
+
+      let vectorize_call func args dest =
+        let index = get_tmp Int "index" in
+        (* Find an example of one thing that needs to be vectorized, to compute
          * the number of iterations of the for loop and the size of the output
-         * array.
+         * array. Also evaluate arguments and save them to temporaries to avoid
+         * evaluating them (and potentially allocating qubits) more than once.
          *)
-        let arr = List.fold_left2 (fun arr ((argtyp, _) as arg) (ftyp, _) ->
-          if ftyp = Qubit && argtyp = Array(Qubit) then
-            Some arg
-          else
-            arr) None args func.formals in
+        let arr, stmts, args = List.fold_left2
+          (fun (arr, stmts, args) ((argtyp, _) as arg) (ftyp, _) ->
+            let argtmp = get_tmp argtyp "argtmp" in
+            (if ftyp = Qubit && argtyp = Array(Qubit) then
+              Some argtmp
+            else
+              arr),
+            SExpr(argtyp, SAssign(argtmp, arg)) :: stmts,
+            argtmp :: args)
+          (None, [], []) args func.formals in
+        let args = List.rev args in
+        (* get one of the array arguments to call length() on *)
         let arr = match arr with
             Some a -> a
           | None ->
+              print_string ((String.concat ", "
+                (List.map string_of_sexpr args)) ^ "\n");
               raise (Failure "internal error foo")
         in
-        SBlock([
+        SBlock(stmts @ [
           (* dest = qubit[](length(arr)); *)
           SExpr(Array(func.typ),
-                SAssign((Array(func.typ), SId(dest)),
+                SAssign(dest,
                         (Array(func.typ),
                          STypeCons(Array(func.typ),
                                    [(Int, SCall("length", [arr]))]))));
           (* for (index = 0; index < length(arr); index++) *)
-          SFor((Int, SAssign((Int, SId(index)), (Int, SLiteral 0))),
-               (Bool, SBinop((Int, SId(index)), Less,
-                  (Int, SCall("length", [arr])))),
-               (Int, SAssign((Int, SId(index)),
-                  (Int, SBinop((Int, SId(index)), Add, (Int, SLiteral(1)))))),
+          SFor((Int, SAssign(index, (Int, SLiteral 0))),
+               (Bool, SBinop(index, Less, (Int, SCall("length", [arr])))),
+               (Int, SAssign(index,
+                  (Int, SBinop(index, Add, (Int, SLiteral(1)))))),
                (* loop body: dest[index] = func(...); *)
                SExpr(func.typ, 
-                SAssign((func.typ, SDeref((Array(func.typ), SId(dest)),
-                                          (Int, SId(index)))),
+                SAssign((func.typ, SDeref(dest, index)),
                         (func.typ, SCall(func.fname,
                           List.map2 (fun (ftyp, _) ((argtyp, _) as e) ->
                             if ftyp = Qubit && argtyp == Array(Qubit) then
-                              (Qubit, SDeref(e, (Int, SId(index))))
+                              (Qubit, SDeref(e, index))
                             else
                               e) func.formals args)))))])
       in
 
       let rec flatten_call (typ, e) = match e with
           SCall(name, args) ->
-            let args', stmts = List.split (List.map flatten_call args) in
+            let args, stmts = List.split (List.map flatten_call args) in
             let stmts = List.flatten stmts in
-            let tmp = "@tmp" ^ string_of_int !counter in
-            counter := !counter + 1;
-            temps := (typ, tmp) :: !temps;
+            let tmp = get_tmp typ "functmp" in
             let func = find_func name in
-            let need_vectorize = typ != func.typ in
+            let need_vectorize = typ <> func.typ in
             let stmt = if need_vectorize then
               vectorize_call func args tmp
             else
-              (* @tmp = func(args) *)
-              SExpr(typ, SAssign((typ, SId(tmp)), (typ, SCall(name, args'))))
+              (* @functmp = func(args) *)
+              SExpr(typ, SAssign(tmp, (typ, SCall(name, args))))
             in
-            ((typ, SId(tmp)), stmts @ [stmt])
+            (tmp, stmts @ [stmt])
         | STupleLit(el) ->
             let el', stmts = List.split (List.map flatten_call el) in
             let stmts = List.flatten stmts in

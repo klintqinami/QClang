@@ -17,7 +17,8 @@ and value =
   | VFloat of float
   | VQubit of string
   | VBit of string
-  | VQubitInvalid of lvalue
+  | VQubitInvalid
+  | VBitInvalid
   | VTuple of value list
   | VNoexpr
 
@@ -36,7 +37,8 @@ let rec string_of_val = function
   | VFloat f -> string_of_float f
   | VQubit q -> q
   | VBit b -> b
-  | VQubitInvalid _ -> "invalid"
+  | VQubitInvalid -> "qinvalid"
+  | VBitInvalid -> "binvalid"
   | VTuple lst -> "(" ^ String.concat ", " (List.map string_of_val lst) ^ ")"
   | VNoexpr -> "void"
 
@@ -74,26 +76,14 @@ let unwrap_bit = function
 
 let unwrap_qubit = function
     env, VQubit(q) -> env, q
-  | _, VQubitInvalid(var) ->
-      raise (Failure ("qubit " ^ (string_of_lval var) ^ " used more than once"))
   | _ -> raise (Failure "internal error: missing qubit")
  
 let rec default_val name env = function
     Int -> VInt 0
   | Bool -> VBool false
   | Float -> VFloat 0.
-  | Qubit -> let qname = 
-      (if String.contains name '@' then
-        String.sub name 1 (String.length name - 1) ^ "_qt"
-      else name ^ "_q") ^ string_of_int env.counter in
-      print_string ("qreg " ^ qname ^ "[1];\n");
-      VQubit (qname)
-  | Bit -> let bname =
-      (if String.contains name '@' then
-        String.sub name 1 (String.length name - 1) ^ "_bt"
-      else name ^ "_b") ^ string_of_int env.counter in
-      print_string ("creg " ^ bname ^ "[1];\n");
-      VBit (bname)
+  | Qubit -> VQubitInvalid
+  | Bit -> VBitInvalid
   | Tuple(el) -> VTuple (List.mapi (fun i typ ->
       default_val
         ((if String.contains name '@' then name else "@" ^ name)
@@ -139,10 +129,10 @@ let translate functions =
   and load_lval_check env lval =
     let env, value = load_lval env lval in
     (match value with
-        VQubit _ -> (store_lval env (VQubitInvalid lval) lval)
-      | VQubitInvalid(var) ->
+        VQubit _ -> (store_lval env VQubitInvalid lval)
+      | VQubitInvalid ->
           raise (Failure 
-            ("qubit " ^ (string_of_lval var) ^ " used more than once"))
+            ("qubit " ^ (string_of_lval lval) ^ "undefined or used more than once"))
       | _ -> env), value
   and store_lval env value = function
       LVId(s) -> { env with name_map = StringMap.add s value env.name_map }
@@ -337,6 +327,10 @@ let translate functions =
   eval_stmt env = function
       SBlock(lst) -> eval_stmts env lst
     | SExpr(expr) ->
+        (*
+        print_string ("// evaluating expr: " ^ string_of_sexpr expr ^ "\n");
+        print_string ("// env: " ^ string_of_env env ^ "\n");
+        *)
         let env, _ = eval_expr env expr in
         env, VNone
     | SIf(cond, thn, els) ->
@@ -380,7 +374,7 @@ let translate functions =
       { env' with name_map =
         StringMap.add name (default_val name env typ) env'.name_map })
       env' func.slocals in
-    let _, sv = eval_stmt env' func.sbody in
+    let env', sv = eval_stmt env' func.sbody in
     ({ env' with name_map = env.name_map }, match sv with
         VNone -> VNoexpr
       | VReturn v -> v)
